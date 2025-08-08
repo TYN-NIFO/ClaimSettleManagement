@@ -71,4 +71,4 @@ jobs:
         with:
           app-name: 'claimmanagement-backend'
           slot-name: 'Production'
-          package: ./backend
+          package: ./
