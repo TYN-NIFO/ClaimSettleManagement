@@ -52,6 +52,13 @@ const userSchema = new mongoose.Schema({
   department: {
     type: String,
     trim: true
+  },
+  // Password reset fields
+  resetPasswordToken: {
+    type: String
+  },
+  resetPasswordExpires: {
+    type: Date
   }
 }, {
   timestamps: true
@@ -61,6 +68,7 @@ const userSchema = new mongoose.Schema({
 userSchema.index({ role: 1, isActive: 1 });
 userSchema.index({ assignedSupervisor1: 1 });
 userSchema.index({ assignedSupervisor2: 1 });
+userSchema.index({ resetPasswordToken: 1 });
 
 // Virtual for password (not stored)
 userSchema.virtual('password').set(function(password) {
@@ -76,6 +84,8 @@ userSchema.methods.checkPassword = function(password) {
 userSchema.methods.toPublicJSON = function() {
   const user = this.toObject();
   delete user.passwordHash;
+  delete user.resetPasswordToken;
+  delete user.resetPasswordExpires;
   return user;
 };
 

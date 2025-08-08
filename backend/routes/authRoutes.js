@@ -2,10 +2,16 @@ const express = require('express');
 const router = express.Router();
 const cookieParser = require('cookie-parser');
 const {
-  login,
+  register,
+  token,
   refresh,
   logout,
-  revokeUserSessions
+  getProfile,
+  checkUsername,
+  revokeUserSessions,
+  changePassword,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/authController');
 const auth = require('../middleware/auth');
 const { requireAdmin } = require('../middleware/rbac');
@@ -13,16 +19,25 @@ const { requireAdmin } = require('../middleware/rbac');
 // Use cookie parser for refresh tokens
 router.use(cookieParser());
 
-// POST /auth/login - User login
-router.post('/login', login);
+// Authentication endpoints - Token-based authentication
+router.post('/register/', register);
+router.post('/token/', token);
+router.post('/refresh/', refresh);
+router.post('/logout/', auth, logout);
 
-// POST /auth/refresh - Refresh access token
-router.post('/refresh', refresh);
+// Profile and user management
+router.get('/me/', auth, getProfile);
+router.patch('/me/', auth, getProfile);
+router.post('/change-password/', auth, changePassword);
 
-// POST /auth/logout - User logout
-router.post('/logout', auth, logout);
+// Username checking
+router.post('/check-username/', checkUsername);
 
-// POST /auth/revoke/:userId - Revoke all sessions for a user (admin only)
-router.post('/revoke/:userId', auth, requireAdmin, revokeUserSessions);
+// Password reset
+router.post('/forgot-password/', forgotPassword);
+router.post('/reset-password/', resetPassword);
+
+// Admin only endpoints
+router.post('/revoke/:userId/', auth, requireAdmin, revokeUserSessions);
 
 module.exports = router;

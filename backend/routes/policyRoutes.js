@@ -1,29 +1,109 @@
-const express = require('express');
+import express from 'express';
+import { auth } from '../middleware/auth.js';
+import { rbac } from '../middleware/rbac.js';
+import Policy from '../models/Policy.js';
+import { createDefaultPolicy } from '../services/policyValidation.js';
+
 const router = express.Router();
-const {
-  getPolicy,
-  updatePolicy
-} = require('../controllers/policyController');
-const auth = require('../middleware/auth');
-const { requireAdmin } = require('../middleware/rbac');
-const { body } = require('express-validator');
 
-// Validation rules
-const policyValidation = [
-  body('approvalMode').optional().isIn(['both', 'any']).withMessage('Approval mode must be "both" or "any"'),
-  body('claimCategories').optional().isArray().withMessage('Claim categories must be an array'),
-  body('maxAmountBeforeFinanceManager').optional().isFloat({ min: 0 }).withMessage('Max amount must be a positive number'),
-  body('allowedFileTypes').optional().isArray().withMessage('Allowed file types must be an array'),
-  body('maxFileSizeMB').optional().isFloat({ min: 1 }).withMessage('Max file size must be at least 1MB'),
-  body('payoutChannels').optional().isArray().withMessage('Payout channels must be an array'),
-  body('autoAssignSupervisors').optional().isBoolean().withMessage('Auto assign supervisors must be a boolean'),
-  body('claimRetentionDays').optional().isInt({ min: 30 }).withMessage('Claim retention days must be at least 30')
-];
+/**
+ * GET /api/policy/current
+ * Get the current active policy
+ */
+router.get('/current', auth, async (req, res) => {
+  try {
+    let policy = await Policy.findOne().sort({ createdAt: -1 });
+    
+    if (!policy) {
+      // Create default policy if none exists
+      policy = await createDefaultPolicy();
+    }
 
-// GET /policies - Get current policy
-router.get('/', auth, getPolicy);
+    res.json({
+      success: true,
+      policy
+    });
+  } catch (error) {
+    console.error('Policy get error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get policy',
+      details: error.message
+    });
+  }
+});
 
-// PATCH /policies - Update policy (admin only)
-router.patch('/', auth, requireAdmin, policyValidation, updatePolicy);
+/**
+ * PUT /api/policy
+ * Update or create policy (Admin only)
+ */
+router.put('/', auth, rbac(['admin']), async (req, res) => {
+  try {
+    const policyData = req.body;
 
-module.exports = router;
+    // Validate required fields
+    if (!policyData.version) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: 'Version is required'
+      });
+    }
+
+    if (!policyData.mealCaps || !policyData.lodgingCaps || !policyData.requiredDocuments) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: 'mealCaps, lodgingCaps, and requiredDocuments are required'
+      });
+    }
+
+    // Create new policy version
+    const policy = new Policy({
+      ...policyData,
+      updatedBy: req.user._id
+    });
+
+    await policy.save();
+
+    res.json({
+      success: true,
+      message: 'Policy updated successfully',
+      policy
+    });
+  } catch (error) {
+    console.error('Policy update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update policy',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/policy/history
+ * Get policy history (Admin only)
+ */
+router.get('/history', auth, rbac(['admin']), async (req, res) => {
+  try {
+    const policies = await Policy.find()
+      .sort({ createdAt: -1 })
+      .select('version createdAt updatedBy')
+      .populate('updatedBy', 'name email');
+
+    res.json({
+      success: true,
+      policies
+    });
+  } catch (error) {
+    console.error('Policy history error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get policy history',
+      details: error.message
+    });
+  }
+});
+
+export default router;

@@ -16,6 +16,14 @@ interface Claim {
   };
   createdAt: string;
   updatedAt: string;
+  paid?: {
+    isPaid: boolean;
+    paidBy?: {
+      name: string;
+    };
+    paidAt?: string;
+    channel?: string;
+  };
 }
 
 interface ClaimListProps {
@@ -78,6 +86,30 @@ export default function ClaimList({ claims }: ClaimListProps) {
     }
   };
 
+  const getPaymentStatus = (claim: Claim) => {
+    if (claim.paid?.isPaid) {
+      return {
+        text: `Paid via ${claim.paid.channel}`,
+        color: 'bg-green-100 text-green-800',
+        icon: <CheckCircle className="h-4 w-4 text-green-500" />
+      };
+    }
+    
+    if (claim.status === 'finance_approved') {
+      return {
+        text: 'Ready for Payment',
+        color: 'bg-blue-100 text-blue-800',
+        icon: <Clock className="h-4 w-4 text-blue-500" />
+      };
+    }
+    
+    return {
+      text: 'Not Ready',
+      color: 'bg-gray-100 text-gray-800',
+      icon: <AlertCircle className="h-4 w-4 text-gray-500" />
+    };
+  };
+
   if (claims.length === 0) {
     return (
       <div className="text-center py-8">
@@ -107,6 +139,9 @@ export default function ClaimList({ claims }: ClaimListProps) {
               Status
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Payment Status
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Created
             </th>
           </tr>
@@ -131,6 +166,14 @@ export default function ClaimList({ claims }: ClaimListProps) {
                   {getStatusIcon(claim.status)}
                   <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(claim.status)}`}>
                     {getStatusText(claim.status)}
+                  </span>
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex items-center">
+                  {getPaymentStatus(claim).icon}
+                  <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatus(claim).color}`}>
+                    {getPaymentStatus(claim).text}
                   </span>
                 </div>
               </td>

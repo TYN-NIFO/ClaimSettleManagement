@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useGetPolicyQuery } from '../../lib/api';
-import toast from 'react-hot-toast';
 import { X, DollarSign } from 'lucide-react';
 
 const paymentSchema = z.object({

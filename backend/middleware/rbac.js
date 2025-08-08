@@ -60,15 +60,19 @@ const canAccessClaim = async (req, res, next) => {
       }
     }
 
-    // Finance manager can access approved claims
-    if (user.role === 'finance_manager' && 
-        ['both_approved', 'finance_approved', 'paid'].includes(claim.status)) {
-      req.claim = claim;
-      return next();
+    // Finance manager can access claims that need finance approval or are already approved
+    if (user.role === 'finance_manager') {
+      // Allow access to claims that need finance approval or are already approved/paid
+      const allowedStatuses = ['both_approved', 'finance_approved', 'paid'];
+      if (allowedStatuses.includes(claim.status)) {
+        req.claim = claim;
+        return next();
+      }
     }
 
     return res.status(403).json({ error: 'Access denied to this claim' });
   } catch (error) {
+    console.error('Error in canAccessClaim:', error);
     res.status(500).json({ error: 'Error checking claim access' });
   }
 };

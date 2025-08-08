@@ -1,53 +1,46 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const policySchema = new mongoose.Schema({
-  approvalMode: {
-    type: String,
-    enum: ['both', 'any'],
-    default: 'both',
+const PolicySchema = new mongoose.Schema({
+  version: { 
+    type: String, 
+    required: true 
+  },
+  mileageRate: { 
+    type: Number, 
+    default: 12 
+  }, // ₹/km
+  cityClasses: { 
+    type: [String], 
+    default: ["A", "B", "C"] 
+  },
+  mealCaps: { // per city class
+    type: mongoose.Schema.Types.Mixed, // { A: { breakfast: 150, lunch: 300, dinner: 400, snack: 100 }, ... }
     required: true
   },
-  claimCategories: [{
-    type: String,
-    trim: true
-  }],
-  maxAmountBeforeFinanceManager: {
-    type: Number,
-    default: 10000,
-    min: 0
-  },
-  allowedFileTypes: [{
-    type: String,
-    trim: true
-  }],
-  maxFileSizeMB: {
-    type: Number,
-    default: 10,
-    min: 1
-  },
-  payoutChannels: [{
-    type: String,
-    trim: true
-  }],
-  autoAssignSupervisors: {
-    type: Boolean,
-    default: false
-  },
-  claimRetentionDays: {
-    type: Number,
-    default: 365,
-    min: 30
-  },
-  updatedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  lodgingCaps: { 
+    type: mongoose.Schema.Types.Mixed, 
+    required: true 
+  }, // { A: 3500, B: 2500, C: 1800 }
+  requiredDocuments: { // per line type
+    type: mongoose.Schema.Types.Mixed, // { flight: ["airline_invoice","mmt_invoice"], train:["ticket","payment_proof"], ... }
     required: true
+  },
+  adminSubCategories: { 
+    type: [String], 
+    default: ["printout", "repairs", "filing", "others"] 
+  },
+  rulesBehavior: { // "hard" blocks submit; "soft" allows with override
+    missingDocuments: { 
+      type: String, 
+      default: "hard" 
+    },
+    capExceeded: { 
+      type: String, 
+      default: "soft" 
+    }
   }
-}, {
-  timestamps: true
+}, { 
+  timestamps: true 
 });
 
-// Ensure only one policy document exists
-policySchema.index({}, { unique: true });
-
-module.exports = mongoose.model('Policy', policySchema);
+export default mongoose.model('Policy', PolicySchema);

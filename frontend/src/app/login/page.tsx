@@ -4,9 +4,9 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
-import LoginPage from './components/LoginPage';
+import LoginPage from '../components/LoginPage';
 
-export default function HomePage() {
+export default function LoginRoute() {
   const router = useRouter();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
 

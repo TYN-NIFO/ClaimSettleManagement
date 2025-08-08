@@ -1,139 +1,146 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
-const claimSchema = new mongoose.Schema({
-  employeeId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const AttachmentSchema = new mongoose.Schema({
+  fileId: String,
+  name: String,
+  size: Number,
+  mime: String,
+  storageKey: String,
+  label: String // for required document matching
+}, { _id: false });
+
+const LineItemBase = {
+  date: { type: Date, required: true },
+  amount: { type: Number, required: true },
+  notes: String,
+  attachments: { type: [AttachmentSchema], default: [] },
+  type: { type: String, required: true }
+};
+
+const LineItemSchema = new mongoose.Schema({
+  ...LineItemBase,
+  // Flight/Train specific fields
+  from: String,
+  to: String,
+  airline: String,
+  pnr: String,
+  invoiceNo: String,
+  trainNo: String,
+  class: String,
+  
+  // Local travel
+  mode: String, // auto/taxi/metro/bus
+  kilometers: Number,
+  
+  // Meal/Lodging
+  city: String,
+  mealType: String, // breakfast/lunch/dinner/snack
+  checkIn: Date,
+  checkOut: Date,
+  nights: Number,
+  
+  // GST
+  gst: {
+    gstin: String,
+    taxBreakup: {
+      cgst: Number,
+      sgst: Number,
+      igst: Number
+    }
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+  
+  // Client entertainment
+  attendeeCount: Number,
+  customer: String,
+  
+  // Admin misc
+  subCategory: String
+}, { _id: true });
+
+const AdvanceSchema = new mongoose.Schema({
+  date: Date,
+  refNo: String,
+  amount: Number
+}, { _id: true });
+
+const ClaimSchema = new mongoose.Schema({
+  employeeId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
   },
-  category: {
-    type: String,
-    required: true,
-    trim: true
+  category: { 
+    type: String, 
+    enum: ['Alliance', 'Co-Innovation', 'Tech', 'Admin Exp', 'Employee-Related Exp'], 
+    required: true 
   },
-  date: {
-    type: Date,
-    required: true
+  accountHead: { 
+    type: String, 
+    enum: ['Business Travel', 'Fuel', 'Business Promotion', 'Admin Exp', 'Training (Learning)'], 
+    required: true 
   },
-  amount: {
-    type: Number,
-    required: true,
-    min: 0
+  trip: {
+    fromDate: Date,
+    toDate: Date,
+    purpose: String,
+    costCenter: String,
+    project: String,
+    cityClass: String
   },
-  description: {
-    type: String,
-    required: true,
-    trim: true
+  advances: { 
+    type: [AdvanceSchema], 
+    default: [] 
   },
-  attachments: [{
-    url: {
-      type: String,
-      required: true
-    },
-    name: {
-      type: String,
-      required: true
-    },
-    mime: {
-      type: String,
-      required: true
-    },
-    size: {
-      type: Number,
-      required: true
-    },
-    uploadedAt: {
-      type: Date,
-      default: Date.now
+  lineItems: { 
+    type: [LineItemSchema], 
+    default: [] 
+  },
+  totalsByHead: { 
+    type: mongoose.Schema.Types.Mixed, 
+    default: {} 
+  },
+  grandTotal: Number,
+  netPayable: Number,
+  status: { 
+    type: String, 
+    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'paid'], 
+    default: 'submitted' 
+  },
+  policyVersion: String,
+  violations: [{
+    code: String,
+    message: String,
+    level: { 
+      type: String, 
+      enum: ['warn', 'error'] 
     }
   }],
-  status: {
-    type: String,
-    enum: ['submitted', 's1_approved', 's2_approved', 'both_approved', 'finance_approved', 'paid', 'rejected'],
-    default: 'submitted'
+  
+  // Approval/Rejection tracking
+  supervisorApproval: {
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: Date,
+    status: { type: String, enum: ['approved', 'rejected', 'pending'], default: 'pending' },
+    reason: String,
+    notes: String
   },
-  approvals: {
-    supervisor1At: Date,
-    supervisor2At: Date,
-    financeManagerAt: Date
+  financeApproval: {
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: Date,
+    status: { type: String, enum: ['approved', 'rejected', 'pending'], default: 'pending' },
+    reason: String,
+    notes: String
   },
-  notes: {
-    supervisor: String,
-    financeManager: String,
-    rejectionReason: String
-  },
-  paid: {
-    isPaid: {
-      type: Boolean,
-      default: false
-    },
-    paidBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
+  
+  // Payment tracking
+  payment: {
+    paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     paidAt: Date,
-    channel: String
-  },
-  timeline: [{
-    at: {
-      type: Date,
-      default: Date.now
-    },
-    by: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    action: {
-      type: String,
-      required: true
-    },
-    message: {
-      type: String,
-      required: true
-    }
-  }]
-}, {
-  timestamps: true
+    channel: String,
+    reference: String
+  }
+}, { 
+  timestamps: true 
 });
 
-// Indexes for efficient queries
-claimSchema.index({ employeeId: 1 });
-claimSchema.index({ status: 1 });
-claimSchema.index({ createdAt: -1 });
-claimSchema.index({ 'paid.isPaid': 1 });
-claimSchema.index({ category: 1 });
-
-// Method to add timeline entry
-claimSchema.methods.addTimelineEntry = function(userId, action, message) {
-  this.timeline.push({
-    by: userId,
-    action,
-    message
-  });
-  return this.save();
-};
-
-// Method to check if claim can be approved by supervisor
-claimSchema.methods.canBeApprovedBySupervisor = function(supervisorLevel) {
-  if (this.status === 'rejected') return false;
-  
-  if (supervisorLevel === 1) {
-    return this.status === 'submitted';
-  } else if (supervisorLevel === 2) {
-    return this.status === 's1_approved';
-  }
-  return false;
-};
-
-// Method to check if claim is ready for finance approval
-claimSchema.methods.isReadyForFinance = function() {
-  return this.status === 'both_approved' || this.status === 's1_approved';
-};
-
-module.exports = mongoose.model('Claim', claimSchema);
+export default mongoose.model('Claim', ClaimSchema);

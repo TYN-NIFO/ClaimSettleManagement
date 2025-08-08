@@ -1,30 +1,64 @@
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const User = require('../models/User');
 const RefreshToken = require('../models/RefreshToken');
 const AuditLog = require('../models/AuditLog');
 
-// Generate access token
-const generateAccessToken = (userId) => {
+// Token configuration
+const TOKEN_CONFIG = {
+  accessToken: {
+    expiresIn: '15m',
+    algorithm: 'HS256'
+  },
+  refreshToken: {
+    expiresIn: '30d',
+    algorithm: 'HS256'
+  }
+};
+
+// Generate access token with more claims
+const generateAccessToken = (user) => {
   return jwt.sign(
-    { userId },
+    {
+      userId: user._id,
+      email: user.email,
+      role: user.role,
+      jti: uuidv4(),
+      type: 'access'
+    },
     process.env.JWT_SECRET,
-    { expiresIn: '15m' }
+    { 
+      expiresIn: TOKEN_CONFIG.accessToken.expiresIn,
+      algorithm: TOKEN_CONFIG.accessToken.algorithm
+    }
   );
 };
 
 // Generate refresh token
 const generateRefreshToken = () => {
-  return uuidv4();
+  return crypto.randomBytes(64).toString('hex');
 };
 
-// Set refresh token cookie
+// Set refresh token cookie with better security
 const setRefreshTokenCookie = (res, token) => {
   res.cookie('refreshToken', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    sameSite: 'lax',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    path: '/api/auth/refresh/'
+  });
+};
+
+// Clear refresh token cookie
+const clearRefreshTokenCookie = (res) => {
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/auth/refresh/'
   });
 };
 
@@ -35,36 +69,52 @@ const createAuditLog = async (userId, action, resource, details = {}) => {
       userId,
       action,
       resource,
-      details
+      details: {
+        ...details,
+        timestamp: new Date(),
+        userAgent: details.userAgent || 'Unknown'
+      }
     });
   } catch (error) {
     console.error('Audit log creation failed:', error);
   }
 };
 
-// Login
-const login = async (req, res) => {
+// Register new user
+const register = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { name, email, password, role = 'employee', department } = req.body;
 
     // Validate input
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Name, email, and password are required' 
+      });
     }
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(409).json({ 
+        error: 'User already exists',
+        details: 'A user with this email already exists' 
+      });
     }
 
-    // Check password
-    if (!user.checkPassword(password)) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    // Create new user
+    const user = new User({
+      name,
+      email: email.toLowerCase(),
+      password,
+      role,
+      department
+    });
+
+    await user.save();
 
     // Generate tokens
-    const accessToken = generateAccessToken(user._id);
+    const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken();
     const jti = uuidv4();
     const family = uuidv4();
@@ -75,7 +125,72 @@ const login = async (req, res) => {
       tokenHash: RefreshToken.hashToken(refreshToken),
       jti,
       family,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    });
+
+    // Set refresh token cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    // Create audit log
+    await createAuditLog(user._id, 'REGISTER', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      user: user.toPublicJSON(),
+      accessToken
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+};
+
+// Token-based authentication (replaces login)
+const token = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Email and password are required' 
+      });
+    }
+
+    // Find user
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user.isActive) {
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'Invalid credentials' 
+      });
+    }
+
+    // Check password
+    if (!user.checkPassword(password)) {
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'Invalid credentials' 
+      });
+    }
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken();
+    const jti = uuidv4();
+    const family = uuidv4();
+
+    // Store refresh token
+    await RefreshToken.create({
+      userId: user._id,
+      tokenHash: RefreshToken.hashToken(refreshToken),
+      jti,
+      family,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     });
 
     // Update last login
@@ -86,50 +201,63 @@ const login = async (req, res) => {
     setRefreshTokenCookie(res, refreshToken);
 
     // Create audit log
-    await createAuditLog(user._id, 'LOGIN', 'AUTH', { ipAddress: req.ip });
+    await createAuditLog(user._id, 'TOKEN_AUTH', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
 
     res.json({
+      message: 'Authentication successful',
       user: user.toPublicJSON(),
       accessToken
     });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    console.error('Token authentication error:', error);
+    res.status(500).json({ error: 'Authentication failed' });
   }
 };
 
-// Refresh token
+// Refresh token with rotation
 const refresh = async (req, res) => {
   try {
     const refreshToken = req.cookies.refreshToken;
     
     if (!refreshToken) {
-      return res.status(401).json({ error: 'Refresh token required' });
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'Refresh token required' 
+      });
     }
 
     // Find refresh token in database
     const tokenDoc = await RefreshToken.findOne({
-      jti: req.body.jti,
+      tokenHash: RefreshToken.hashToken(refreshToken),
       isRevoked: false,
       expiresAt: { $gt: new Date() }
     });
 
     if (!tokenDoc || !tokenDoc.verifyToken(refreshToken)) {
-      return res.status(401).json({ error: 'Invalid refresh token' });
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'Invalid or expired refresh token' 
+      });
     }
 
     // Get user
     const user = await User.findById(tokenDoc.userId);
     if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'User not found or inactive' });
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'User not found or inactive' 
+      });
     }
 
     // Generate new tokens
-    const newAccessToken = generateAccessToken(user._id);
+    const newAccessToken = generateAccessToken(user);
     const newRefreshToken = generateRefreshToken();
     const newJti = uuidv4();
 
-    // Revoke old token and create new one
+    // Revoke old token and create new one (token rotation)
     tokenDoc.isRevoked = true;
     await tokenDoc.save();
 
@@ -144,10 +272,16 @@ const refresh = async (req, res) => {
     // Set new refresh token cookie
     setRefreshTokenCookie(res, newRefreshToken);
 
+    // Create audit log
+    await createAuditLog(user._id, 'TOKEN_REFRESH', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
     res.json({
+      message: 'Token refreshed successfully',
       user: user.toPublicJSON(),
-      accessToken: newAccessToken,
-      jti: newJti
+      accessToken: newAccessToken
     });
   } catch (error) {
     console.error('Refresh error:', error);
@@ -169,17 +303,217 @@ const logout = async (req, res) => {
     }
 
     // Clear cookie
-    res.clearCookie('refreshToken');
+    clearRefreshTokenCookie(res);
 
     // Create audit log
     if (req.user) {
-      await createAuditLog(req.user._id, 'LOGOUT', 'AUTH', { ipAddress: req.ip });
+      await createAuditLog(req.user._id, 'LOGOUT', 'AUTH', { 
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
     }
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
     console.error('Logout error:', error);
     res.status(500).json({ error: 'Logout failed' });
+  }
+};
+
+// Get user profile
+const getProfile = async (req, res) => {
+  try {
+    if (req.method === 'PATCH') {
+      // Update profile
+      const { name, email, department } = req.body;
+      const updates = {};
+      
+      if (name) updates.name = name;
+      if (email) updates.email = email.toLowerCase();
+      if (department) updates.department = department;
+
+      const user = await User.findByIdAndUpdate(
+        req.user._id,
+        updates,
+        { new: true, runValidators: true }
+      );
+
+      await createAuditLog(req.user._id, 'PROFILE_UPDATE', 'USER', { 
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+
+      res.json({
+        message: 'Profile updated successfully',
+        user: user.toPublicJSON()
+      });
+    } else {
+      // Get profile
+      res.json({
+        user: req.user.toPublicJSON()
+      });
+    }
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({ error: 'Profile operation failed' });
+  }
+};
+
+// Check username availability
+const checkUsername = async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Email is required' 
+      });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    
+    res.json({
+      available: !existingUser,
+      message: existingUser ? 'Email already taken' : 'Email available'
+    });
+  } catch (error) {
+    console.error('Username check error:', error);
+    res.status(500).json({ error: 'Username check failed' });
+  }
+};
+
+// Change password
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Current password and new password are required' 
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    
+    // Verify current password
+    if (!user.checkPassword(currentPassword)) {
+      return res.status(401).json({ 
+        error: 'Authentication failed',
+        details: 'Current password is incorrect' 
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    // Revoke all refresh tokens for this user
+    await RefreshToken.updateMany(
+      { userId: user._id },
+      { isRevoked: true }
+    );
+
+    await createAuditLog(user._id, 'PASSWORD_CHANGE', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Password change failed' });
+  }
+};
+
+// Forgot password
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Email is required' 
+      });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      // Don't reveal if user exists or not
+      return res.json({ message: 'If the email exists, a reset link has been sent' });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpiry;
+    await user.save();
+
+    // TODO: Send email with reset link
+    // For now, just return the token (in production, send via email)
+    console.log('Password reset token:', resetToken);
+
+    await createAuditLog(user._id, 'FORGOT_PASSWORD', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    res.json({ message: 'If the email exists, a reset link has been sent' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Forgot password failed' });
+  }
+};
+
+// Reset password
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Token and new password are required' 
+      });
+    }
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        error: 'Invalid token',
+        details: 'Password reset token is invalid or expired' 
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    // Revoke all refresh tokens for this user
+    await RefreshToken.updateMany(
+      { userId: user._id },
+      { isRevoked: true }
+    );
+
+    await createAuditLog(user._id, 'PASSWORD_RESET', 'AUTH', { 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
+
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Password reset failed' });
   }
 };
 
@@ -197,7 +531,8 @@ const revokeUserSessions = async (req, res) => {
     // Create audit log
     await createAuditLog(req.user._id, 'REVOKE_SESSIONS', 'USER', { 
       targetUserId: userId,
-      ipAddress: req.ip 
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
     });
 
     res.json({ message: 'All sessions revoked successfully' });
@@ -208,8 +543,14 @@ const revokeUserSessions = async (req, res) => {
 };
 
 module.exports = {
-  login,
+  register,
+  token,
   refresh,
   logout,
+  getProfile,
+  checkUsername,
+  changePassword,
+  forgotPassword,
+  resetPassword,
   revokeUserSessions
 };

@@ -1,12 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { RootState } from './store';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-
+// Base query with authentication
 const baseQuery = fetchBaseQuery({
   baseUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
   credentials: 'include',
   prepareHeaders: (headers, { getState }) => {
-    const token = (getState() as { auth: { accessToken: string } }).auth.accessToken;
+    const token = (getState() as RootState).auth.accessToken;
     if (token) {
       headers.set('authorization', `Bearer ${token}`);
     }
@@ -14,19 +14,32 @@ const baseQuery = fetchBaseQuery({
   },
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// Base query with re-authentication
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  if (result.error && (result.error as { status: number }).status === 401) {
-    // Try to get a new token
-    const refreshResult = await baseQuery('/auth/refresh', api, extraOptions);
+  if (result.error && result.error.status === 401) {
+    // Try to refresh the token
+    const refreshResult = await baseQuery(
+      {
+        url: '/auth/refresh/',
+        method: 'POST',
+      },
+      api,
+      extraOptions
+    );
+
     if (refreshResult.data) {
       // Store the new token
-      api.dispatch({ type: 'auth/setTokens', payload: refreshResult.data });
+      api.dispatch({
+        type: 'auth/setTokens',
+        payload: refreshResult.data,
+      });
+
       // Retry the original request
       result = await baseQuery(args, api, extraOptions);
     } else {
+      // Refresh failed, logout
       api.dispatch({ type: 'auth/logout' });
     }
   }
@@ -35,172 +48,255 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
 };
 
 export const api = createApi({
-  reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['User', 'Claim', 'Policy'],
+  tagTypes: ['Claims', 'Policy', 'Users'],
   endpoints: (builder) => ({
-    // Auth endpoints
-    login: builder.mutation({
+    // Authentication
+    token: builder.mutation({
       query: (credentials) => ({
-        url: '/auth/login',
+        url: '/auth/token/',
         method: 'POST',
         body: credentials,
       }),
     }),
-    logout: builder.mutation({
-      query: () => ({
-        url: '/auth/logout',
-        method: 'POST',
-      }),
-    }),
     refresh: builder.mutation({
       query: () => ({
-        url: '/auth/refresh',
+        url: '/auth/refresh/',
         method: 'POST',
       }),
     }),
-
-    // User endpoints
-    getUsers: builder.query({
-      query: (params) => ({
-        url: '/users',
-        params,
-      }),
-      providesTags: ['User'],
-    }),
-    getUser: builder.query({
-      query: (id) => `/users/${id}`,
-      providesTags: (result, error, id) => [{ type: 'User', id }],
-    }),
-    createUser: builder.mutation({
-      query: (userData) => ({
-        url: '/users',
+    logout: builder.mutation({
+      query: () => ({
+        url: '/auth/logout/',
         method: 'POST',
-        body: userData,
       }),
-      invalidatesTags: ['User'],
     }),
-    updateUser: builder.mutation({
-      query: ({ id, ...userData }) => ({
-        url: `/users/${id}`,
-        method: 'PATCH',
-        body: userData,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'User', id }],
+    getProfile: builder.query({
+      query: () => '/auth/me/',
     }),
-    deactivateUser: builder.mutation({
-      query: (id) => ({
-        url: `/users/${id}/deactivate`,
+    updateProfile: builder.mutation({
+      query: (profile) => ({
+        url: '/auth/me/',
         method: 'PATCH',
+        body: profile,
       }),
-      invalidatesTags: ['User'],
+    }),
+    checkUsername: builder.mutation({
+      query: (email) => ({
+        url: '/auth/check-username/',
+        method: 'POST',
+        body: { email },
+      }),
+    }),
+    changePassword: builder.mutation({
+      query: (passwords) => ({
+        url: '/auth/change-password/',
+        method: 'POST',
+        body: passwords,
+      }),
+    }),
+    forgotPassword: builder.mutation({
+      query: (email) => ({
+        url: '/auth/forgot-password/',
+        method: 'POST',
+        body: { email },
+      }),
     }),
     resetPassword: builder.mutation({
-      query: ({ id, password }) => ({
-        url: `/users/${id}/reset-password`,
-        method: 'PATCH',
-        body: { password },
+      query: (data) => ({
+        url: '/auth/reset-password/',
+        method: 'POST',
+        body: data,
       }),
-    }),
-    getSupervisors: builder.query({
-      query: () => '/users/supervisors',
     }),
 
-    // Claim endpoints
-    getClaims: builder.query({
-      query: (params) => ({
-        url: '/claims',
-        params,
+    // Policy
+    getPolicy: builder.query({
+      query: () => '/policy/current',
+      providesTags: ['Policy'],
+    }),
+    updatePolicy: builder.mutation({
+      query: (policy) => ({
+        url: '/policy',
+        method: 'PUT',
+        body: policy,
       }),
-      providesTags: ['Claim'],
+      invalidatesTags: ['Policy'],
     }),
-    getClaim: builder.query({
-      query: (id) => `/claims/${id}`,
-      providesTags: (result, error, id) => [{ type: 'Claim', id }],
+    getPolicyHistory: builder.query({
+      query: () => '/policy/history',
+      providesTags: ['Policy'],
     }),
+
+    // Claims
     createClaim: builder.mutation({
-      query: (claimData) => ({
+      query: (claim) => ({
         url: '/claims',
         method: 'POST',
-        body: claimData,
+        body: claim,
       }),
-      invalidatesTags: ['Claim'],
+      invalidatesTags: ['Claims'],
     }),
-    approveClaim: builder.mutation({
-      query: ({ id, ...data }) => ({
-        url: `/claims/${id}/approve`,
-        method: 'POST',
-        body: data,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Claim', id }],
-    }),
-    financeApprove: builder.mutation({
-      query: ({ id, ...data }) => ({
-        url: `/claims/${id}/finance-approve`,
-        method: 'POST',
-        body: data,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Claim', id }],
-    }),
-    markAsPaid: builder.mutation({
-      query: ({ id, ...data }) => ({
-        url: `/claims/${id}/mark-paid`,
-        method: 'POST',
-        body: data,
-      }),
-      invalidatesTags: (result, error, { id }) => [{ type: 'Claim', id }],
-    }),
-    uploadAttachment: builder.mutation({
-      query: ({ id, file }) => {
+    uploadClaimFiles: builder.mutation({
+      query: ({ claimId, lineItemId, files, labels }: {
+        claimId: string;
+        lineItemId: string;
+        files: File[];
+        labels: string[];
+      }) => {
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('lineItemId', lineItemId);
+        formData.append('labels', JSON.stringify(labels));
+        
+        files.forEach((file: File) => {
+          formData.append('files', file);
+        });
+
         return {
-          url: `/claims/${id}/upload`,
+          url: `/claims/${claimId}/files`,
           method: 'POST',
           body: formData,
         };
       },
-      invalidatesTags: (result, error, { id }) => [{ type: 'Claim', id }],
+      invalidatesTags: ['Claims'],
     }),
-    getClaimStats: builder.query({
-      query: () => '/claims/stats',
+    getClaims: builder.query({
+      query: (params = {}) => ({
+        url: '/claims',
+        params,
+      }),
+      providesTags: ['Claims'],
+    }),
+    getClaim: builder.query({
+      query: (id) => `/claims/${id}`,
+      providesTags: (result, error, id) => [{ type: 'Claims', id }],
+    }),
+    updateClaim: builder.mutation({
+      query: ({ id, ...claim }) => ({
+        url: `/claims/${id}`,
+        method: 'PATCH',
+        body: claim,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Claims', id },
+        'Claims',
+      ],
+    }),
+    approveClaim: builder.mutation({
+      query: ({ id, action, reason, notes }) => ({
+        url: `/claims/${id}/approve`,
+        method: 'POST',
+        body: { action, reason, notes },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Claims', id },
+        'Claims',
+      ],
+    }),
+    financeApprove: builder.mutation({
+      query: ({ id, action, reason, notes }) => ({
+        url: `/claims/${id}/finance`,
+        method: 'POST',
+        body: { action, reason, notes },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Claims', id },
+        'Claims',
+      ],
+    }),
+    markPaid: builder.mutation({
+      query: ({ id, channel, reference }) => ({
+        url: `/claims/${id}/pay`,
+        method: 'POST',
+        body: { channel, reference },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Claims', id },
+        'Claims',
+      ],
+    }),
+    deleteClaim: builder.mutation({
+      query: (id) => ({
+        url: `/claims/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Claims'],
     }),
 
-    // Policy endpoints
-    getPolicy: builder.query({
-      query: () => '/policies',
-      providesTags: ['Policy'],
-    }),
-    updatePolicy: builder.mutation({
-      query: (policyData) => ({
-        url: '/policies',
-        method: 'PATCH',
-        body: policyData,
+    // Users (Admin only)
+    getUsers: builder.query({
+      query: (params = {}) => ({
+        url: '/users',
+        params,
       }),
-      invalidatesTags: ['Policy'],
+      providesTags: ['Users'],
+    }),
+    createUser: builder.mutation({
+      query: (user) => ({
+        url: '/users',
+        method: 'POST',
+        body: user,
+      }),
+      invalidatesTags: ['Users'],
+    }),
+    updateUser: builder.mutation({
+      query: ({ id, ...user }) => ({
+        url: `/users/${id}`,
+        method: 'PATCH',
+        body: user,
+      }),
+      invalidatesTags: ['Users'],
+    }),
+    deleteUser: builder.mutation({
+      query: (id) => ({
+        url: `/users/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Users'],
+    }),
+    resetUserPassword: builder.mutation({
+      query: ({ id, password }) => ({
+        url: `/users/${id}/reset-password`,
+        method: 'POST',
+        body: { password },
+      }),
+      invalidatesTags: ['Users'],
     }),
   }),
 });
 
 export const {
-  useLoginMutation,
-  useLogoutMutation,
+  // Authentication
+  useTokenMutation,
   useRefreshMutation,
-  useGetUsersQuery,
-  useGetUserQuery,
-  useCreateUserMutation,
-  useUpdateUserMutation,
-  useDeactivateUserMutation,
+  useLogoutMutation,
+  useGetProfileQuery,
+  useUpdateProfileMutation,
+  useCheckUsernameMutation,
+  useChangePasswordMutation,
+  useForgotPasswordMutation,
   useResetPasswordMutation,
-  useGetSupervisorsQuery,
-  useGetClaimsQuery,
-  useGetClaimQuery,
-  useCreateClaimMutation,
-  useApproveClaimMutation,
-  useFinanceApproveMutation,
-  useMarkAsPaidMutation,
-  useUploadAttachmentMutation,
-  useGetClaimStatsQuery,
+
+  // Policy
   useGetPolicyQuery,
   useUpdatePolicyMutation,
+  useGetPolicyHistoryQuery,
+
+  // Claims
+  useCreateClaimMutation,
+  useUploadClaimFilesMutation,
+  useGetClaimsQuery,
+  useGetClaimQuery,
+  useUpdateClaimMutation,
+  useApproveClaimMutation,
+  useFinanceApproveMutation,
+  useMarkPaidMutation,
+  useDeleteClaimMutation,
+
+  // Users
+  useGetUsersQuery,
+  useCreateUserMutation,
+  useUpdateUserMutation,
+  useDeleteUserMutation,
+  useResetUserPasswordMutation,
 } = api;
