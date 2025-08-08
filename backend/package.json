@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "prod": "NODE_ENV=production node server.js",
-    "build": "echo 'No build step required for Node.js'",
+    "build": "npm install && npm run lint",
     "test": "echo 'No tests specified'",
     "lint": "eslint .",
     "seed": "node scripts/seed.js",
@@ -15,9 +15,11 @@
     "create-admin": "node scripts/create-admin.js",
     "assign-supervisors": "node scripts/assign-supervisors.js",
     "update-supervisor-level": "node scripts/update-supervisor-level.js",
-    "create-finance-manager": "node scripts/create-finance-manager.js"
+    "create-finance-manager": "node scripts/create-finance-manager.js",
+    "validate-prod": "node scripts/deploy-production.js"
   },
   "dependencies": {
+    "applicationinsights": "^2.9.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
