@@ -59,6 +59,14 @@ jobs:
           name: backend-app
           path: ./
 
+      - name: Debug downloaded files
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Contents of current directory:"
+          ls -la
+          echo "Contents of backend directory (if exists):"
+          ls -la backend/ 2>/dev/null || echo "backend directory not found"
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -71,4 +79,4 @@ jobs:
         with:
           app-name: 'claimmanagement-backend'
           slot-name: 'Production'
-          package: ./
+          package: ./backend
