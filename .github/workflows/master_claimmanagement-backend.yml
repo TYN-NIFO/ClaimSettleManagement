@@ -30,19 +30,8 @@ jobs:
         with:
           node-version: '22.x'
 
-      - name: Debug working directory
-        run: |
-          echo "Current working directory: $(pwd)"
-          echo "Contents of current directory:"
-          ls -la
-          echo "Contents of backend directory:"
-          ls -la backend/
-
       - name: Install dependencies
-        run: |
-          pwd
-          ls -la
-          npm install
+        run: npm install
 
       - name: Run tests
         run: npm run test --if-present
