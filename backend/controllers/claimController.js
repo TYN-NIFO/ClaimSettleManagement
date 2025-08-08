@@ -1,8 +1,8 @@
-const Claim = require('../models/Claim');
-const User = require('../models/User');
-const Policy = require('../models/Policy');
-const AuditLog = require('../models/AuditLog');
-const { validationResult } = require('express-validator');
+import Claim from '../models/Claim.js';
+import User from '../models/User.js';
+import Policy from '../models/Policy.js';
+import AuditLog from '../models/AuditLog.js';
+import { validationResult } from 'express-validator';
 
 // Create audit log entry
 const createAuditLog = async (userId, action, resource, details = {}) => {
@@ -240,7 +240,7 @@ const approveClaim = async (req, res) => {
         claim.notes.supervisor = notes || '';
         
         // Check if both supervisors approved or policy allows single approval
-        const User = require('../models/User');
+        const User = (await import('../models/User.js')).default;
         const employee = await User.findById(claim.employeeId);
         if (policy.approvalMode === 'any' || !employee?.assignedSupervisor2) {
           claim.status = 'both_approved';
@@ -255,7 +255,7 @@ const approveClaim = async (req, res) => {
           claim.status = 'both_approved';
         } else {
           // If no supervisor level 1 approval, check if policy allows single approval
-          const User = require('../models/User');
+          const User = (await import('../models/User.js')).default;
           const employee = await User.findById(claim.employeeId);
           if (policy.approvalMode === 'any' || !employee?.assignedSupervisor1) {
             claim.status = 'both_approved';
@@ -500,7 +500,7 @@ const getClaimStats = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getClaims,
   getClaimById,
   createClaim,

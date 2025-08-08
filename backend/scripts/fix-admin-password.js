@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const User = require('../models/User');
-const bcrypt = require('bcryptjs');
-require('dotenv').config({ path: './config.env' });
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+dotenv.config({ path: './config.env' });
 
 const fixAdminPassword = async () => {
   try {

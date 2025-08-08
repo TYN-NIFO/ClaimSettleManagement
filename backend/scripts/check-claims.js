@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const Claim = require('../models/Claim');
-const User = require('../models/User');
-require('dotenv').config({ path: './config.env' });
+import mongoose from 'mongoose';
+import Claim from '../models/Claim.js';
+import User from '../models/User.js';
+import dotenv from 'dotenv';
+dotenv.config({ path: './config.env' });
 
 const checkClaims = async () => {
   try {

@@ -1,6 +1,7 @@
-const mongoose = require('mongoose');
-const Policy = require('../models/Policy');
-require('dotenv').config({ path: './config.env' });
+import mongoose from 'mongoose';
+import Policy from '../models/Policy.js';
+import dotenv from 'dotenv';
+dotenv.config({ path: './config.env' });
 
 const testPolicy = async () => {
   try {

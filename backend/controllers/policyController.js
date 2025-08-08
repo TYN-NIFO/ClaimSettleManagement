@@ -1,6 +1,6 @@
-const Policy = require('../models/Policy');
-const AuditLog = require('../models/AuditLog');
-const { validationResult } = require('express-validator');
+import Policy from '../models/Policy.js';
+import AuditLog from '../models/AuditLog.js';
+import { validationResult } from 'express-validator';
 
 // Create audit log entry
 const createAuditLog = async (userId, action, resource, details = {}) => {
@@ -112,7 +112,7 @@ const updatePolicy = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getPolicy,
   updatePolicy
 };

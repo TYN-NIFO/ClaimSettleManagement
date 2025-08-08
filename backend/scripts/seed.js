@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const User = require('../models/User');
-const Policy = require('../models/Policy');
-require('dotenv').config({ path: './config.env' });
+import mongoose from 'mongoose';
+import User from '../models/User.js';
+import Policy from '../models/Policy.js';
+import dotenv from 'dotenv';
+dotenv.config({ path: './config.env' });
 
 const seedDatabase = async () => {
   try {

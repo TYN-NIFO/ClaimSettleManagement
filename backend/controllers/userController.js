@@ -1,6 +1,6 @@
-const User = require('../models/User');
-const AuditLog = require('../models/AuditLog');
-const { validationResult } = require('express-validator');
+import User from '../models/User.js';
+import AuditLog from '../models/AuditLog.js';
+import { validationResult } from 'express-validator';
 
 // Create audit log entry
 const createAuditLog = async (userId, action, resource, details = {}) => {
@@ -264,7 +264,7 @@ const getSupervisors = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getUsers,
   getUserById,
   createUser,

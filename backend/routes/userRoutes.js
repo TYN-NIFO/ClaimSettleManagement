@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const rateLimit = require('express-rate-limit');
-const {
+import rateLimit from 'express-rate-limit';
+import {
   getUsers,
   getUserById,
   createUser,
@@ -9,10 +9,10 @@ const {
   deactivateUser,
   resetPassword,
   getSupervisors
-} = require('../controllers/userController');
-const auth = require('../middleware/auth');
-const { requireAdmin, canAccessUser } = require('../middleware/rbac');
-const { body } = require('express-validator');
+} from '../controllers/userController.js';
+import { auth } from '../middleware/auth.js';
+import { requireAdmin, canAccessUser } from '../middleware/rbac.js';
+import { body } from 'express-validator';
 
 // Rate limiter for user creation - DISABLED FOR NOW
 // const createUserLimiter = rateLimit({
@@ -60,4 +60,4 @@ router.patch('/:id/deactivate', auth, requireAdmin, deactivateUser);
 // PATCH /users/:id/reset-password - Reset user password (admin only)
 router.patch('/:id/reset-password', auth, requireAdmin, passwordValidation, resetPassword);
 
-module.exports = router;
+export default router;

@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 
 const refreshTokenSchema = new mongoose.Schema({
   userId: {
@@ -50,4 +50,4 @@ refreshTokenSchema.methods.verifyToken = function(token) {
 // TTL index to automatically delete expired tokens (jti field already has unique index)
 refreshTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-module.exports = mongoose.model('RefreshToken', refreshTokenSchema);
+export default mongoose.model('RefreshToken', refreshTokenSchema);

@@ -24,7 +24,7 @@ const canAccessClaim = async (req, res, next) => {
   const user = req.user;
 
   try {
-    const Claim = require('../models/Claim');
+    const Claim = (await import('../models/Claim.js')).default;
     const claim = await Claim.findById(claimId);
     
     if (!claim) {
@@ -45,7 +45,7 @@ const canAccessClaim = async (req, res, next) => {
 
     // Supervisor can access claims of assigned employees
     if (user.role === 'supervisor') {
-      const User = require('../models/User');
+      const User = (await import('../models/User.js')).default;
       const assignedEmployees = await User.find({
         $or: [
           { assignedSupervisor1: user._id },
@@ -95,7 +95,7 @@ const canAccessUser = async (req, res, next) => {
   return res.status(403).json({ error: 'Access denied to this user' });
 };
 
-module.exports = {
+export {
   rbac,
   requireAdmin,
   requireSupervisor,

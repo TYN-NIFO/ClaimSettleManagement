@@ -1,10 +1,10 @@
-const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
-const User = require('../models/User');
-const RefreshToken = require('../models/RefreshToken');
-const AuditLog = require('../models/AuditLog');
+import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import User from '../models/User.js';
+import RefreshToken from '../models/RefreshToken.js';
+import AuditLog from '../models/AuditLog.js';
 
 // Token configuration
 const TOKEN_CONFIG = {
@@ -542,7 +542,7 @@ const revokeUserSessions = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   register,
   token,
   refresh,
@@ -552,5 +552,6 @@ module.exports = {
   changePassword,
   forgotPassword,
   resetPassword,
-  revokeUserSessions
+  revokeUserSessions,
+  createAuditLog
 };
