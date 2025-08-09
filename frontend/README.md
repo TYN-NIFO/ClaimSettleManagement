@@ -1,3 +1,34 @@
+## Vercel Deployment via GitHub Actions (Monorepo)
+
+This project is deployed from the `frontend/` directory using Vercel CLI in CI.
+
+### Prerequisites
+
+Create the following GitHub repository secrets (Settings → Secrets and variables → Actions):
+
+- `VERCEL_TOKEN`: Personal token from Vercel
+- `VERCEL_ORG_ID`: Vercel Organization ID
+- `VERCEL_PROJECT_ID`: Vercel Project ID for this frontend
+
+You can get these by running in `frontend/` locally after `npm i -g vercel` and logging in:
+
+```
+vercel link
+vercel project ls
+```
+
+### Workflow
+
+The workflow `.github/workflows/deploy-frontend-vercel.yml`:
+- Only runs on changes under `frontend/**` or manual dispatch
+- Installs dependencies, pulls env, builds, then deploys a prebuilt artifact to production
+
+### Environment variables
+
+Configure environment variables in Vercel project settings for production (and preview if needed). The app expects:
+
+- `NEXT_PUBLIC_API_URL` → Backend API base (e.g. `https://api.example.com/api`)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
