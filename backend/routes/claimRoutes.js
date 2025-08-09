@@ -116,7 +116,10 @@ router.post('/', auth, async (req, res) => {
       successMessage = 'Claim created successfully';
     }
     
-    await createAuditLog(req.user._id, 'claim_created', auditMessage, req.ip, req.get('User-Agent'));
+    await createAuditLog(req.user._id, 'claim_created', auditMessage, {
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    });
       
     res.status(201).json({
       success: true,
@@ -530,8 +533,10 @@ router.post('/:id/approve', auth, rbac(['supervisor', 'admin']), async (req, res
       req.user._id,
       `claim_${action}d`,
       `Claim ${claim._id} ${action}d by supervisor`,
-      req.ip,
-      req.get('User-Agent')
+      {
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
     );
 
     res.json({
@@ -607,8 +612,10 @@ router.post('/:id/finance', auth, rbac(['finance_manager', 'admin']), async (req
       req.user._id,
       `claim_finance_${action}d`,
       `Claim ${claim._id} finance ${action}d`,
-      req.ip,
-      req.get('User-Agent')
+      {
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
     );
 
     res.json({
@@ -675,8 +682,10 @@ router.post('/:id/pay', auth, rbac(['finance_manager', 'admin']), async (req, re
       req.user._id,
       'claim_paid',
       `Claim ${claim._id} marked as paid via ${channel}`,
-      req.ip,
-      req.get('User-Agent')
+      {
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }
     );
 
     res.json({

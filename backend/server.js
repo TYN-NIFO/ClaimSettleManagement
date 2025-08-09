@@ -3,6 +3,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -18,12 +19,18 @@ import userRoutes from './routes/userRoutes.js';
 // Import middleware
 import { auth } from './middleware/auth.js';
 
-// Load environment variables based on environment
-const envFile = process.env.NODE_ENV === 'production' ? 'config.production.env' : 'config.env';
-dotenv.config({ path: envFile });
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables based on environment, but only if the file exists.
+// On platforms like Render/Heroku, environment variables are injected and no file is present.
+const envFilename = process.env.NODE_ENV === 'production' ? 'config.production.env' : 'config.env';
+const envPath = path.join(__dirname, envFilename);
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 // Initialize Application Insights in production
 let appInsights;
@@ -41,6 +48,9 @@ if (process.env.NODE_ENV === 'production' && process.env.APPLICATIONINSIGHTS_CON
 
 const app = express();
 
+// Behind proxies (e.g., Vercel, Nginx) trust X-Forwarded-* for secure cookies and IPs
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
@@ -55,14 +65,36 @@ app.use(helmet({
 }));
 
 // CORS configuration
-const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, process.env.CORS_ORIGIN].filter(Boolean)
-    : process.env.FRONTEND_URL || 'http://localhost:3000',
+const allowedOrigins = (() => {
+  if (process.env.NODE_ENV === 'production') {
+    const list = [process.env.FRONTEND_URL, process.env.CORS_ORIGIN]
+      .filter(Boolean)
+      .flatMap((v) => (v.includes(',') ? v.split(',') : v));
+    return list.length ? list : [];
+  }
+  return [process.env.FRONTEND_URL || 'http://localhost:3000'];
+})();
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // allow non-browser clients
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200
-};
-app.use(cors(corsOptions));
+}));
+
+// Explicitly enable preflight across all routes
+app.options('*', cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
 
 // Rate limiting
 const limiter = rateLimit({

@@ -45,23 +45,39 @@ const generateRefreshToken = () => {
 
 // Set refresh token cookie with better security
 const setRefreshTokenCookie = (res, token) => {
-  res.cookie('refreshToken', token, {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+  const secureCookies = String(process.env.SECURE_COOKIES || (isProduction ? 'true' : 'false')).toLowerCase() === 'true';
+  const sameSite = isProduction ? 'none' : 'lax';
+
+  const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: secureCookies,
+    sameSite,
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-    path: '/api/auth/refresh/'
-  });
+    path: '/api/auth/refresh/',
+    ...(cookieDomain ? { domain: cookieDomain } : {})
+  };
+
+  res.cookie('refreshToken', token, cookieOptions);
 };
 
 // Clear refresh token cookie
 const clearRefreshTokenCookie = (res) => {
-  res.clearCookie('refreshToken', {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+  const secureCookies = String(process.env.SECURE_COOKIES || (isProduction ? 'true' : 'false')).toLowerCase() === 'true';
+  const sameSite = isProduction ? 'none' : 'lax';
+
+  const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/api/auth/refresh/'
-  });
+    secure: secureCookies,
+    sameSite,
+    path: '/api/auth/refresh/',
+    ...(cookieDomain ? { domain: cookieDomain } : {})
+  };
+
+  res.clearCookie('refreshToken', cookieOptions);
 };
 
 // Create audit log entry
