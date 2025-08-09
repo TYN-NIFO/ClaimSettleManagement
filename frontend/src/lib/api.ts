@@ -151,7 +151,7 @@ export const api = createApi({
         method: 'POST',
         body: claim,
       }),
-      invalidatesTags: ['Claims', 'Stats'],
+      invalidatesTags: ['Claims'],
     }),
     uploadClaimFiles: builder.mutation({
       query: ({ claimId, lineItemId, files, labels }: {
@@ -193,7 +193,7 @@ export const api = createApi({
         params,
       }),
       transformResponse: (response: any) => response.stats || response,
-      providesTags: ['Claims', 'Stats'],
+      providesTags: ['Claims'],
     }),
     getClaim: builder.query({
       query: (id) => `/claims/${id}`,
@@ -276,6 +276,13 @@ export const api = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    deactivateUser: builder.mutation({
+      query: (id: string) => ({
+        url: `/users/${id}/deactivate`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: ['Users'],
+    }),
     deleteUser: builder.mutation({
       query: (id) => ({
         url: `/users/${id}`,
@@ -328,6 +335,7 @@ export const {
   useGetUsersQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
+  useDeactivateUserMutation,
   useDeleteUserMutation,
   useResetUserPasswordMutation,
 } = api;

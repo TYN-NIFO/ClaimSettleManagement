@@ -18,7 +18,7 @@ import {
 import toast from 'react-hot-toast';
 
 export default function PolicyManager() {
-  const { data: currentPolicy, isLoading } = useGetPolicyQuery();
+  const { data: currentPolicy, isLoading } = useGetPolicyQuery({});
   const [updatePolicy] = useUpdatePolicyMutation();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -30,29 +30,34 @@ export default function PolicyManager() {
   } = useForm<Policy>({
     resolver: zodResolver(policySchema),
     defaultValues: {
-      version: 'v1.0',
-      mileageRate: 12,
+      mileageRatePerKmINR: 12,
       cityClasses: ['A', 'B', 'C'],
-      mealCaps: {
+      perDiemCaps: {
         A: { breakfast: 200, lunch: 350, dinner: 500, snack: 150 },
         B: { breakfast: 150, lunch: 300, dinner: 400, snack: 120 },
         C: { breakfast: 120, lunch: 250, dinner: 350, snack: 100 }
       },
-      lodgingCaps: { A: 4000, B: 3000, C: 2000 },
-      requiredDocuments: {
-        flight: ['airline_invoice', 'mmt_invoice'],
-        train: ['ticket', 'payment_proof'],
-        local_travel: ['receipt_or_reason'],
-        meal: ['restaurant_bill'],
-        lodging: ['hotel_invoice'],
-        client_entertainment: ['bill_or_proof'],
-        mileage: ['route_or_log'],
-        admin_misc: ['supporting_doc']
+      lodgingCapsPerNight: { A: 4000, B: 3000, C: 2000 },
+      rules: {
+        requiredDocs: {
+          flight: ['airline_invoice', 'mmt_invoice'],
+          train: ['ticket', 'payment_proof'],
+          local_travel: ['receipt_or_reason'],
+          meal: ['restaurant_bill'],
+          lodging: ['hotel_invoice'],
+          client_entertainment: ['bill_or_proof'],
+          mileage: ['route_or_log'],
+          admin_misc: ['supporting_doc']
+        },
+        blocking: ['missing_receipt_over_500'],
+        warnings: ['cap_exceeded', 'multiple_meals_same_day']
       },
-      adminSubCategories: ['printout', 'repairs', 'filing', 'others'],
-      rulesBehavior: { 
-        missingDocuments: 'hard', 
-        capExceeded: 'soft' 
+      itcFlags: {
+        flight: 'eligible_if_business',
+        train: 'eligible',
+        lodging: 'eligible_capture_gstin',
+        meal: 'blocked',
+        client_entertainment: 'blocked'
       }
     }
   });
@@ -115,31 +120,10 @@ export default function PolicyManager() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Version
-                </label>
-                <Controller
-                  name="version"
-                  control={control}
-                  render={({ field }) => (
-                    <input
-                      {...field}
-                      type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="v1.0"
-                    />
-                  )}
-                />
-                {errors.version && (
-                  <p className="text-red-600 text-sm mt-1">{errors.version.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Mileage Rate (₹/km)
                 </label>
                 <Controller
-                  name="mileageRate"
+                  name="mileageRatePerKmINR"
                   control={control}
                   render={({ field }) => (
                     <input
@@ -150,8 +134,8 @@ export default function PolicyManager() {
                     />
                   )}
                 />
-                {errors.mileageRate && (
-                  <p className="text-red-600 text-sm mt-1">{errors.mileageRate.message}</p>
+                {errors.mileageRatePerKmINR && (
+                  <p className="text-red-600 text-sm mt-1">{errors.mileageRatePerKmINR.message}</p>
                 )}
               </div>
             </div>
@@ -174,7 +158,7 @@ export default function PolicyManager() {
                         {mealType}
                       </label>
                       <Controller
-                        name={`mealCaps.${cityClass}.${mealType}`}
+                        name={`perDiemCaps.${cityClass}.${mealType}`}
                         control={control}
                         render={({ field }) => (
                           <input
@@ -203,7 +187,7 @@ export default function PolicyManager() {
                     Class {cityClass}
                   </label>
                   <Controller
-                    name={`lodgingCaps.${cityClass}`}
+                    name={`lodgingCapsPerNight.${cityClass}`}
                     control={control}
                     render={({ field }) => (
                       <input
@@ -236,7 +220,7 @@ export default function PolicyManager() {
                     {lineType.replace('_', ' ')}
                   </label>
                   <Controller
-                    name={`requiredDocuments.${lineType}`}
+                    name={`rules.requiredDocs.${lineType}`}
                     control={control}
                     render={({ field }) => (
                       <textarea
@@ -260,80 +244,6 @@ export default function PolicyManager() {
                   </p>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Admin Sub Categories */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Admin Misc Sub Categories</h3>
-            
-            <Controller
-              name="adminSubCategories"
-              control={control}
-              render={({ field }) => (
-                <textarea
-                  {...field}
-                  value={field.value?.join(', ') || ''}
-                  onChange={(e) => {
-                    const categories = e.target.value
-                      .split(',')
-                      .map(cat => cat.trim())
-                      .filter(cat => cat.length > 0);
-                    field.onChange(categories);
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="printout, repairs, filing, others"
-                  rows={3}
-                />
-              )}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Comma-separated list of admin misc sub categories
-            </p>
-          </div>
-
-          {/* Rules Behavior */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Rules Behavior</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Missing Documents
-                </label>
-                <Controller
-                  name="rulesBehavior.missingDocuments"
-                  control={control}
-                  render={({ field }) => (
-                    <select
-                      {...field}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="hard">Hard (Block submission)</option>
-                      <option value="soft">Soft (Allow with warning)</option>
-                    </select>
-                  )}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cap Exceeded
-                </label>
-                <Controller
-                  name="rulesBehavior.capExceeded"
-                  control={control}
-                  render={({ field }) => (
-                    <select
-                      {...field}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="hard">Hard (Block submission)</option>
-                      <option value="soft">Soft (Allow with warning)</option>
-                    </select>
-                  )}
-                />
-              </div>
             </div>
           </div>
 

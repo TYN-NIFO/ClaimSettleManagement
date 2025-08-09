@@ -11,18 +11,37 @@ import {
   useUploadClaimFilesMutation, 
   useGetPolicyQuery 
 } from '@/lib/api';
+import { z } from 'zod';
 import { 
   claimSchema, 
   lineItemSchema,
+  lineItemWithAttachmentsSchema,
   lineItemTypes,
   mealTypes,
   travelModes,
   cityClasses,
   categories,
   accountHeads,
-  type Claim,
-  type LineItem
+  type Claim
 } from '@/lib/schemas';
+
+type LineItem = z.infer<typeof lineItemWithAttachmentsSchema>;
+
+// Helper function to convert line item type to display label
+const getLineItemTypeLabel = (type: string): string => {
+  const labels: Record<string, string> = {
+    flight: 'Flight',
+    train_bus: 'Train/Bus',
+    local_travel: 'Local Travel',
+    mileage: 'Mileage',
+    lodging: 'Lodging',
+    meal_travel: 'Meal (Travel)',
+    client_entertainment: 'Client Entertainment',
+    team_meal: 'Team Meal',
+    admin_misc: 'Admin/Misc'
+  };
+  return labels[type] || type;
+};
 import { 
   Plus, 
   X, 
@@ -48,7 +67,7 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
   const { user } = useSelector((state: RootState) => state.auth);
   const [createClaim] = useCreateClaimMutation();
   const [uploadFiles] = useUploadClaimFilesMutation();
-  const { data: policy } = useGetPolicyQuery();
+  const { data: policy } = useGetPolicyQuery({});
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -84,31 +103,37 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
 
   // Add line item
   const addLineItem = useCallback((type: string) => {
-    const newLineItem: Partial<LineItem> = {
+    const newLineItem = {
       type: type as any,
+      name: '',
       date: new Date(),
-      amount: 0
+      amount: 0,
+      currency: 'INR' as const,
+      gstTotal: 0,
+      amountInINR: 0,
+      attachments: []
     };
 
     // Set type-specific defaults
+    const lineItem = newLineItem as any;
     switch (type) {
       case 'mileage':
-        newLineItem.kilometers = 0;
+        lineItem.kilometers = 0;
         break;
       case 'lodging':
-        newLineItem.checkIn = new Date();
-        newLineItem.checkOut = new Date();
-        newLineItem.nights = 1;
+        lineItem.checkIn = new Date();
+        lineItem.checkOut = new Date();
+        lineItem.nights = 1;
         break;
       case 'meal':
-        newLineItem.mealType = 'lunch';
+        lineItem.mealType = 'lunch';
         break;
       case 'local_travel':
-        newLineItem.mode = 'auto';
+        lineItem.mode = 'auto';
         break;
     }
 
-    appendLineItem(newLineItem as LineItem);
+    appendLineItem(lineItem);
   }, [appendLineItem]);
 
   // Calculate totals
@@ -116,8 +141,8 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
     const lineItems = watch('lineItems');
     const advances = watch('advances');
     
-    const grandTotal = lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-    const advancesTotal = advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
+    const grandTotal = lineItems.reduce((sum: number, item: any) => sum + (item.amount || 0), 0);
+    const advancesTotal = advances.reduce((sum: number, advance: any) => sum + (advance.amount || 0), 0);
     const netPayable = grandTotal - advancesTotal;
     
     return { grandTotal, advancesTotal, netPayable };
@@ -207,8 +232,8 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {categories.map(cat => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
+                      <option key={cat} value={cat}>
+                        {cat}
                       </option>
                     ))}
                   </select>
@@ -232,8 +257,8 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {accountHeads.map(head => (
-                      <option key={head.value} value={head.value}>
-                        {head.label}
+                      <option key={head} value={head}>
+                        {head}
                       </option>
                     ))}
                   </select>
@@ -257,7 +282,7 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
                   Purpose
                 </label>
                 <Controller
-                  name="trip.purpose"
+                  name="purpose"
                   control={control}
                   render={({ field }) => (
                     <input
@@ -274,7 +299,7 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
                   City Class
                 </label>
                 <Controller
-                  name="trip.cityClass"
+                  name="cityClass"
                   control={control}
                   render={({ field }) => (
                     <select
@@ -283,8 +308,8 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
                     >
                       <option value="">Select City Class</option>
                       {cityClasses.map(cls => (
-                        <option key={cls.value} value={cls.value}>
-                          {cls.label}
+                        <option key={cls} value={cls}>
+                          {cls}
                         </option>
                       ))}
                     </select>
@@ -387,13 +412,13 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
               <div className="flex space-x-2">
                 {lineItemTypes.map(type => (
                   <button
-                    key={type.value}
+                    key={type}
                     type="button"
-                    onClick={() => addLineItem(type.value)}
+                    onClick={() => addLineItem(type)}
                     className="flex items-center px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    {type.label}
+                    {getLineItemTypeLabel(type)}
                   </button>
                 ))}
               </div>
@@ -614,8 +639,8 @@ function LineItemForm({ index, control, errors, lineItem, policy, onRemove }: Li
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {mealTypes.map(type => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
+                      <option key={type} value={type}>
+                        {type}
                       </option>
                     ))}
                   </select>
@@ -654,8 +679,8 @@ function LineItemForm({ index, control, errors, lineItem, policy, onRemove }: Li
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {travelModes.map(mode => (
-                      <option key={mode.value} value={mode.value}>
-                        {mode.label}
+                      <option key={mode} value={mode}>
+                        {mode}
                       </option>
                     ))}
                   </select>
@@ -743,7 +768,7 @@ function LineItemForm({ index, control, errors, lineItem, policy, onRemove }: Li
     <div className="border border-gray-200 rounded-lg p-4 mb-4">
       <div className="flex justify-between items-center mb-4">
         <h4 className="text-lg font-medium text-gray-900">
-          {lineItemTypes.find(t => t.value === lineItem.type)?.label} - Line {index + 1}
+          {getLineItemTypeLabel(lineItem.type)} - Line {index + 1}
         </h4>
         <button
           type="button"

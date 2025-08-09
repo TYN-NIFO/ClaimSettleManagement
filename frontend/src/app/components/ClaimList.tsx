@@ -200,9 +200,9 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
     return user.role === 'finance_manager' && claim.status === 'finance_approved';
   };
 
-  const handleMarkAsPaid = async (claimId: string, channel: string) => {
+  const handleMarkAsPaid = async (claimId: string, channel?: string) => {
     try {
-      await markPaid({ id: claimId, channel }).unwrap();
+      await markPaid({ id: claimId, channel: channel || 'manual' }).unwrap();
       setPayingClaim(null);
     } catch (e) {
       // swallow; UI can show global toasts if available
@@ -258,7 +258,7 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {claims.map((claim) => {
+          {claims.map((claim: any) => {
             const firstLineItem = getFirstLineItem(claim);
             return (
               <tr key={claim._id} className="hover:bg-gray-50">

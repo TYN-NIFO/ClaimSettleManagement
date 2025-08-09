@@ -51,9 +51,9 @@ export default function ClaimViewPage() {
     return user.role === 'finance_manager' && claim.status === 'finance_approved';
   };
 
-  const handleMarkAsPaid = async (id: string, channel: string) => {
+  const handleMarkAsPaid = async (id: string, channel?: string) => {
     try {
-      await markPaid({ id, channel }).unwrap();
+      await markPaid({ id, channel: channel || 'manual' }).unwrap();
       setIsPaymentOpen(false);
     } catch (e) {
       // Error is surfaced via toast/UI elsewhere if implemented

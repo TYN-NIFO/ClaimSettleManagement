@@ -41,7 +41,7 @@ export default function AdminDashboard() {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await logoutMutation().unwrap();
+      await logoutMutation(undefined).unwrap();
       await authService.logout();
       dispatch(logout());
       router.push('/login');
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
   const calculateStats = () => {
     if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
     
-    const stats = claims.reduce((acc, claim) => {
+    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
       acc.total++;
       acc.totalAmount += claim.grandTotal || 0;
       
@@ -210,7 +210,7 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {claims.slice(0, 10).map((claim) => (
+                        {claims.slice(0, 10).map((claim: any) => (
                           <tr key={claim._id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                               {claim.employeeId?.name || 'Unknown'}
@@ -298,7 +298,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
+                      {users.map((user: any) => (
                         <tr key={user._id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             {user.name}
@@ -406,7 +406,7 @@ export default function AdminDashboard() {
         {/* Tabs */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => {
+            {tabs.map((tab: any) => {
               const Icon = tab.icon;
               return (
                 <button

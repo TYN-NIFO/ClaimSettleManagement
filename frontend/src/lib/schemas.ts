@@ -167,6 +167,7 @@ export const claimSchema = z.object({
   }).optional(),
   project: z.string().optional(),
   costCenter: z.string().optional(),
+  cityClass: z.enum(categoryCityClasses as [string, ...string[]]).optional(),
   advances: z.array(advanceSchema).default([]),
   lineItems: z.array(lineItemWithAttachmentsSchema).min(1, 'At least one line item is required').max(15, 'Maximum 15 line items allowed'),
   totalsByHead: z.record(z.number()).default({}),

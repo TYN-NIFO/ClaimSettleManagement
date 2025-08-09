@@ -213,8 +213,8 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
     const lineItems = watch('lineItems');
     const advances = watch('advances');
     
-    const grandTotal = lineItems.reduce((sum, item) => sum + (item.amountInINR || 0), 0);
-    const advancesTotal = advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
+    const grandTotal = lineItems.reduce((sum: number, item: any) => sum + (item.amountInINR || 0), 0);
+    const advancesTotal = advances.reduce((sum: number, advance: any) => sum + (advance.amount || 0), 0);
     const netPayable = grandTotal - advancesTotal;
     
     return { grandTotal, advancesTotal, netPayable };
@@ -522,7 +522,7 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
             <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
               <p className="text-sm text-red-600 font-medium">Please fix the following errors:</p>
               <ul className="mt-2 text-sm text-red-600">
-                {Object.entries(errors).map(([field, error]) => (
+                {Object.entries(errors).map(([field, error]: [string, any]) => (
                   <li key={field}>• {error?.message || 'Invalid field'}</li>
                 ))}
               </ul>

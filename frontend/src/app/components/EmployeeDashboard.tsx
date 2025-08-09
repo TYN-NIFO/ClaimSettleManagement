@@ -36,7 +36,7 @@ export default function EmployeeDashboard() {
   // Handle logout
   const handleLogout = async () => {
     try {
-      await logoutMutation().unwrap();
+      await logoutMutation(undefined).unwrap();
       await authService.logout();
       dispatch(logout());
       router.push('/login');
@@ -53,7 +53,7 @@ export default function EmployeeDashboard() {
   const calculateStats = () => {
     if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
     
-    const stats = claims.reduce((acc, claim) => {
+    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
       acc.total++;
       acc.totalAmount += claim.grandTotal || 0;
       
@@ -244,7 +244,7 @@ export default function EmployeeDashboard() {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {claims.map((claim) => (
+                        {claims.map((claim: any) => (
                           <tr key={claim._id} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {claim._id.slice(-8)}
