@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  mongo:
+    image: mongo:6
+    container_name: claim-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
   backend:
     build: ./backend
     ports:
@@ -8,7 +17,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
-      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_URI=mongodb://mongo:27017/claims
       - JWT_SECRET=${JWT_SECRET}
       - REFRESH_TOKEN_SECRET=${REFRESH_TOKEN_SECRET}
       - CORS_ORIGIN=${FRONTEND_URL}
@@ -17,6 +26,8 @@ services:
       - ./backend/uploads:/app/uploads
       - ./backend/logs:/app/logs
     restart: unless-stopped
+    depends_on:
+      - mongo
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
       interval: 30s
@@ -43,3 +54,5 @@ services:
 networks:
   default:
     name: claim-app-network
+volumes:
+  mongodb_data:

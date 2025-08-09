@@ -40,29 +40,13 @@ const getClaims = async (req, res) => {
       filter.employeeId = user._id;
       console.log('👤 Employee filter:', filter);
     } else if (user.role === 'supervisor') {
-      // Get assigned employees
-      const assignedEmployees = await User.find({
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      }).select('_id');
-      
-      console.log('👥 Supervisor assigned employees:', assignedEmployees.length);
-      
-      // If supervisor has assigned employees, filter by them
-      if (assignedEmployees.length > 0) {
-        filter.employeeId = { $in: assignedEmployees.map(emp => emp._id) };
-        console.log('👥 Supervisor filter with assigned employees:', filter);
-      } else {
-        // If no employees assigned, show all claims that need supervisor approval
-        filter.status = { $in: ['submitted', 's1_approved', 's2_approved', 'both_approved'] };
-        console.log('👥 Supervisor filter without assigned employees:', filter);
-      }
+      // Supervisors see all claims they need to manage
+      filter.status = { $in: ['submitted', 'approved', 'rejected'] };
+      console.log('👥 Supervisor filter - all manageable claims:', filter);
     } else if (user.role === 'finance_manager') {
-      // Finance managers see all claims that need finance approval or are finance approved
-      filter.status = { $in: ['both_approved', 'finance_approved', 'paid'] };
-      console.log('💰 Finance manager filter:', filter);
+      // Finance managers see all claims for complete oversight
+      // No status filter - they can see all claim statuses
+      console.log('💰 Finance manager filter - all claims:', filter);
     }
     // Admin can see all claims (no filter applied)
     console.log('🔍 Final filter:', filter);

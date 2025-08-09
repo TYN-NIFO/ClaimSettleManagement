@@ -18,7 +18,7 @@ const baseQuery = fetchBaseQuery({
 const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  if (result.error && result.error.status === 401) {
+  if (result.error && (result.error.status === 401 || result.error.status === 403)) {
     // Try to refresh the token
     const refreshResult = await baseQuery(
       {
@@ -151,7 +151,7 @@ export const api = createApi({
         method: 'POST',
         body: claim,
       }),
-      invalidatesTags: ['Claims'],
+      invalidatesTags: ['Claims', 'Stats'],
     }),
     uploadClaimFiles: builder.mutation({
       query: ({ claimId, lineItemId, files, labels }: {
@@ -179,8 +179,12 @@ export const api = createApi({
     getClaims: builder.query({
       query: (params = {}) => ({
         url: '/claims',
-        params,
+        params: {
+          limit: 50, // Increase default limit from 20 to 50
+          ...params
+        },
       }),
+      transformResponse: (response: any) => response.claims ? { ...response, claims: response.claims } : response,
       providesTags: ['Claims'],
     }),
     getClaimStats: builder.query({
@@ -188,10 +192,12 @@ export const api = createApi({
         url: '/claims/stats',
         params,
       }),
-      providesTags: ['Claims'],
+      transformResponse: (response: any) => response.stats || response,
+      providesTags: ['Claims', 'Stats'],
     }),
     getClaim: builder.query({
       query: (id) => `/claims/${id}`,
+      transformResponse: (response: any) => response.claim || response,
       providesTags: (result, error, id) => [{ type: 'Claims', id }],
     }),
     updateClaim: builder.mutation({

@@ -52,15 +52,75 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    // Set initial status based on user role hierarchy
+    if (req.user.role === 'finance_manager') {
+      // Finance managers' claims skip both supervisor and finance approval
+      claimData.status = 'finance_approved';
+      claimData.supervisorApproval = {
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        status: 'approved',
+        notes: 'Auto-approved: Claim created by Finance Manager'
+      };
+      claimData.financeApproval = {
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        status: 'approved',
+        notes: 'Auto-approved: Claim created by Finance Manager'
+      };
+    } else if (req.user.role === 'supervisor') {
+      // Supervisors' claims skip supervisor approval, go to finance stage
+      claimData.status = 'approved';
+      claimData.supervisorApproval = {
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        status: 'approved',
+        notes: 'Auto-approved: Claim created by Supervisor'
+      };
+    } else if (req.user.role === 'admin') {
+      // Admin claims can go directly to finance approved
+      claimData.status = 'finance_approved';
+      claimData.supervisorApproval = {
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        status: 'approved',
+        notes: 'Auto-approved: Claim created by Admin'
+      };
+      claimData.financeApproval = {
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        status: 'approved',
+        notes: 'Auto-approved: Claim created by Admin'
+      };
+    }
+    // For employees, default status 'submitted' is used
+
     const claim = new Claim(claimData);
     await claim.save();
 
     // Create audit log
-    await createAuditLog(req.user._id, 'claim_created', `Claim ${claim._id} created`, req.ip, req.get('User-Agent'));
-
+    // Create appropriate audit message based on role
+    let auditMessage, successMessage;
+    
+    if (req.user.role === 'finance_manager') {
+      auditMessage = `Claim ${claim._id} created and auto-approved to finance stage by Finance Manager`;
+      successMessage = 'Claim created and auto-approved to finance stage successfully';
+    } else if (req.user.role === 'supervisor') {
+      auditMessage = `Claim ${claim._id} created and auto-approved to finance review by Supervisor`;
+      successMessage = 'Claim created and auto-approved for finance review successfully';
+    } else if (req.user.role === 'admin') {
+      auditMessage = `Claim ${claim._id} created and auto-approved to finance stage by Admin`;
+      successMessage = 'Claim created and auto-approved to finance stage successfully';
+    } else {
+      auditMessage = `Claim ${claim._id} created`;
+      successMessage = 'Claim created successfully';
+    }
+    
+    await createAuditLog(req.user._id, 'claim_created', auditMessage, req.ip, req.get('User-Agent'));
+      
     res.status(201).json({
       success: true,
-      message: 'Claim created successfully',
+      message: successMessage,
       claimId: claim._id,
       violations: violations.filter(v => v.level === 'warn'), // Only return warnings
       claim
@@ -245,11 +305,12 @@ router.get('/', auth, async (req, res) => {
     if (req.user.role === 'employee') {
       query.employeeId = req.user._id;
     } else if (req.user.role === 'supervisor') {
-      // Supervisors see claims from their team members
-      // This would need to be enhanced based on your team structure
+      // Supervisors see all claims they need to manage
+      // Show submitted (for approval), approved/rejected (for tracking)
       query.status = { $in: ['submitted', 'approved', 'rejected'] };
     } else if (req.user.role === 'finance_manager') {
-      query.status = { $in: ['approved', 'finance_approved', 'paid'] };
+      // Finance managers see all claims for complete oversight
+      // No status filter - they can see all claim statuses
     }
     // Admin sees all claims
 
@@ -454,7 +515,7 @@ router.post('/:id/approve', auth, rbac(['supervisor', 'admin']), async (req, res
     claim.supervisorApproval = {
       approvedBy: req.user._id,
       approvedAt: new Date(),
-      status: action,
+      status: action === 'approve' ? 'approved' : 'rejected',
       reason: action === 'reject' ? reason : undefined,
       notes
     };
@@ -531,7 +592,7 @@ router.post('/:id/finance', auth, rbac(['finance_manager', 'admin']), async (req
     claim.financeApproval = {
       approvedBy: req.user._id,
       approvedAt: new Date(),
-      status: action,
+      status: action === 'approve' ? 'approved' : 'rejected',
       reason: action === 'reject' ? reason : undefined,
       notes
     };

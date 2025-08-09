@@ -93,10 +93,36 @@ const authSlice = createSlice({
               user: user?.email,
               hasToken: !!accessToken
             });
-            state.user = user;
-            state.accessToken = accessToken;
-            state.isAuthenticated = true;
-            state.error = null;
+            
+            // Check if token is expired
+            let isTokenValid = true;
+            if (accessToken) {
+              try {
+                const payload = JSON.parse(atob(accessToken.split('.')[1]));
+                const currentTime = Math.floor(Date.now() / 1000);
+                isTokenValid = payload.exp > currentTime;
+                console.log('🔍 Token validity check:', {
+                  expires: new Date(payload.exp * 1000).toISOString(),
+                  isValid: isTokenValid
+                });
+              } catch (error) {
+                console.error('❌ Failed to decode token:', error);
+                isTokenValid = false;
+              }
+            }
+            
+            if (isTokenValid) {
+              state.user = user;
+              state.accessToken = accessToken;
+              state.isAuthenticated = true;
+              state.error = null;
+            } else {
+              console.log('⚠️ Stored token is expired, clearing auth data');
+              localStorage.removeItem('auth');
+              state.user = null;
+              state.accessToken = null;
+              state.isAuthenticated = false;
+            }
             state.isInitialized = true;
           } catch (error) {
             console.error('❌ Failed to parse stored auth:', error);

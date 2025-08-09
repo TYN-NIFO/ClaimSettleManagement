@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCreateClaimMutation, useGetPolicyQuery, useUploadClaimFilesMutation } from '../../lib/api';
+import { useCreateClaimMutation, useUpdateClaimMutation, useGetPolicyQuery, useUploadClaimFilesMutation } from '../../lib/api';
 import { 
   categoryMaster, 
   businessUnits, 
@@ -60,14 +60,17 @@ type ClaimFormData = z.infer<ReturnType<typeof createClaimSchema>>;
 interface ImprovedClaimFormProps {
   onClose: () => void;
   employeeId?: string;
+  existingClaim?: any;
+  isEditing?: boolean;
 }
 
-export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaimFormProps) {
+export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, isEditing = false }: ImprovedClaimFormProps) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<{ [key: number]: File[] }>({});
   const [fileLabels, setFileLabels] = useState<{ [key: number]: string[] }>({});
   
   const [createClaim, { isLoading: isCreatingClaim }] = useCreateClaimMutation();
+  const [updateClaim, { isLoading: isUpdatingClaim }] = useUpdateClaimMutation();
   const [uploadClaimFiles, { isLoading: isUploadingFiles }] = useUploadClaimFilesMutation();
   const { data: policy, isLoading: policyLoading } = useGetPolicyQuery({});
 
@@ -99,6 +102,30 @@ export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaim
     control,
     name: 'lineItems'
   });
+
+  // Initialize form with existing claim data when editing
+  useEffect(() => {
+    if (isEditing && existingClaim) {
+      const claimData = {
+        businessUnit: existingClaim.businessUnit || 'Alliance',
+        category: existingClaim.category || '',
+        advances: existingClaim.advances || [],
+        lineItems: existingClaim.lineItems?.map((item: any) => ({
+          date: item.date ? new Date(item.date).toISOString().split('T')[0] : '',
+          subCategory: item.subCategory || '',
+          description: item.description || '',
+          currency: item.currency || 'INR',
+          amount: item.amount || 0,
+          gstTotal: item.gstTotal || 0,
+          amountInINR: item.amountInINR || 0,
+          attachments: item.attachments || []
+        })) || []
+      };
+      
+      reset(claimData);
+      setSelectedCategory(existingClaim.category || '');
+    }
+  }, [isEditing, existingClaim, reset]);
 
   // Handle category change
   const handleCategoryChange = (category: string) => {
@@ -230,8 +257,17 @@ export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaim
 
       console.log('Submitting claim with data:', claimData);
 
-      const result = await createClaim(claimData).unwrap();
-      console.log('Claim created successfully:', result);
+      let result;
+      if (isEditing && existingClaim) {
+        result = await updateClaim({
+          id: existingClaim._id,
+          ...claimData
+        }).unwrap();
+        console.log('Claim updated successfully:', result);
+      } else {
+        result = await createClaim(claimData).unwrap();
+        console.log('Claim created successfully:', result);
+      }
       
       // Upload files for each line item if they exist
       const uploadPromises = Object.entries(uploadedFiles).map(async ([lineItemIndex, files]) => {
@@ -255,10 +291,12 @@ export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaim
 
       await Promise.all(uploadPromises);
 
-      toast.success('Claim submitted successfully!');
-      reset();
-      setUploadedFiles({});
-      setFileLabels({});
+      toast.success(isEditing ? 'Claim updated successfully!' : 'Claim submitted successfully!');
+      if (!isEditing) {
+        reset();
+        setUploadedFiles({});
+        setFileLabels({});
+      }
       onClose();
     } catch (error: unknown) {
       console.error('Claim submission error:', error);
@@ -279,7 +317,9 @@ export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaim
               <ArrowLeft className="h-5 w-5 mr-2" />
               Back
             </button>
-            <h1 className="text-2xl font-semibold text-gray-900">Submit New Claim</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">
+              {isEditing ? 'Edit Claim' : 'Submit New Claim'}
+            </h1>
           </div>
         </div>
 
@@ -454,10 +494,10 @@ export default function ImprovedClaimForm({ onClose, employeeId }: ImprovedClaim
             </button>
             <button
               type="submit"
-              disabled={isCreatingClaim || isUploadingFiles || lineItemFields.length === 0 || !employeeId}
+              disabled={isCreatingClaim || isUpdatingClaim || isUploadingFiles || lineItemFields.length === 0 || !employeeId}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {isCreatingClaim || isUploadingFiles ? 'Submitting...' : 'Submit Claim'}
+              {isCreatingClaim || isUpdatingClaim || isUploadingFiles ? (isEditing ? 'Updating...' : 'Submitting...') : (isEditing ? 'Update Claim' : 'Submit Claim')}
             </button>
           </div>
           

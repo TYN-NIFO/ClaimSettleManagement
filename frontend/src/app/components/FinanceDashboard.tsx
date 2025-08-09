@@ -44,8 +44,11 @@ export default function FinanceDashboard() {
 
   // Debug logging
   console.log('Finance Dashboard - User:', user);
-  console.log('Finance Dashboard - Claims data:', claims);
+  console.log('Finance Dashboard - Raw Claims Data:', claimsData);
+  console.log('Finance Dashboard - Processed Claims:', claims);
+  console.log('Finance Dashboard - Claims Count:', claims?.length);
   console.log('Finance Dashboard - Claims loading:', claimsLoading);
+  console.log('Finance Dashboard - Claims error:', claimsError);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -159,7 +162,7 @@ export default function FinanceDashboard() {
                 <p className="text-red-600">Error loading claims. Please try again.</p>
               </div>
             ) : (
-              <ClaimList claims={claims?.claims || []} />
+              <ClaimList claims={claims || []} />
             )}
           </div>
         </div>

@@ -1,16 +1,65 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useGetClaimQuery } from '@/lib/api';
+import { useSelector } from 'react-redux';
+import { useGetClaimQuery, useMarkPaidMutation } from '@/lib/api';
+import { RootState } from '@/lib/store';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, Download } from 'lucide-react';
+import { ArrowLeft, Edit, DollarSign } from 'lucide-react';
+import PaymentModal from '@/app/components/PaymentModal';
 
 export default function ClaimViewPage() {
   const params = useParams();
   const router = useRouter();
   const claimId = params.id as string;
+  const { user } = useSelector((state: RootState) => state.auth);
 
   const { data: claim, isLoading, error } = useGetClaimQuery(claimId);
+
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [markPaid, { isLoading: isMarkingPaid }] = useMarkPaidMutation();
+
+  const canEditClaim = (claim: any): boolean => {
+    if (!user || !claim) return false;
+
+    // Admin can edit all claims
+    if (user.role === 'admin') return true;
+
+    // Employees can only edit their own claims if status allows it
+    if (user.role === 'employee') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Supervisors can only edit their own claims (not their assigned employees' claims)
+    if (user.role === 'supervisor') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Finance managers can see Edit for claims they created, except when already paid
+    if (user.role === 'finance_manager') {
+      return claim.employeeId._id === user._id && claim.status !== 'paid';
+    }
+
+    return false;
+  };
+
+  const canMarkAsPaid = (claim: any): boolean => {
+    if (!user || !claim) return false;
+    return user.role === 'finance_manager' && claim.status === 'finance_approved';
+  };
+
+  const handleMarkAsPaid = async (id: string, channel: string) => {
+    try {
+      await markPaid({ id, channel }).unwrap();
+      setIsPaymentOpen(false);
+    } catch (e) {
+      // Error is surfaced via toast/UI elsewhere if implemented
+      // Keeping silent here to avoid disrupting UX
+    }
+  };
 
   if (isLoading) {
     return (
@@ -55,13 +104,25 @@ export default function ClaimViewPage() {
             <h1 className="text-2xl font-semibold text-gray-900">Claim Details</h1>
           </div>
           <div className="flex space-x-3">
-            <button
-              onClick={() => router.push(`/claims/${claimId}/edit`)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
-            </button>
+            {canEditClaim(claim) && (
+              <button
+                onClick={() => router.push(`/claims/${claimId}/edit`)}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit
+              </button>
+            )}
+            {canMarkAsPaid(claim) && (
+              <button
+                onClick={() => setIsPaymentOpen(true)}
+                disabled={isMarkingPaid}
+                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                {isMarkingPaid ? 'Processing...' : 'Mark as Paid'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -91,13 +152,13 @@ export default function ClaimViewPage() {
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Created</h3>
                 <p className="mt-1 text-sm text-gray-900">
-                  {format(new Date(claim.createdAt), 'MMM dd, yyyy HH:mm')}
+                  {claim.createdAt ? format(new Date(claim.createdAt), 'MMM dd, yyyy HH:mm') : 'N/A'}
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Last Updated</h3>
                 <p className="mt-1 text-sm text-gray-900">
-                  {format(new Date(claim.updatedAt), 'MMM dd, yyyy HH:mm')}
+                  {claim.updatedAt ? format(new Date(claim.updatedAt), 'MMM dd, yyyy HH:mm') : 'N/A'}
                 </p>
               </div>
             </div>
@@ -137,7 +198,7 @@ export default function ClaimViewPage() {
                 {claim.lineItems?.map((item: any, index: number) => (
                   <tr key={index}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(new Date(item.date), 'MMM dd, yyyy')}
+                      {item.date ? format(new Date(item.date), 'MMM dd, yyyy') : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {item.subCategory}
@@ -184,6 +245,13 @@ export default function ClaimViewPage() {
           </div>
         </div>
       </div>
+      {isPaymentOpen && claim && (
+        <PaymentModal
+          claim={claim}
+          onClose={() => setIsPaymentOpen(false)}
+          onMarkAsPaid={handleMarkAsPaid}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useGetClaimStatsQuery } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useApproveClaimMutation } from '@/lib/api';
 import authService from '@/lib/authService';
 import { 
   LogOut, 
@@ -18,6 +18,8 @@ import {
   Plus
 } from 'lucide-react';
 import ClaimList from './ClaimList';
+import ClaimApprovalModal from './ClaimApprovalModal';
+import { toast } from 'react-hot-toast';
 
 export default function SupervisorDashboard() {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -25,6 +27,11 @@ export default function SupervisorDashboard() {
   const claims = claimsData?.claims || [];
   const { data: stats, isLoading: statsLoading } = useGetClaimStatsQuery({});
   const router = useRouter();
+  const [approveClaim] = useApproveClaimMutation();
+  
+  // Modal state
+  const [selectedClaim, setSelectedClaim] = useState(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Handle logout
   const handleLogout = async () => {
@@ -40,6 +47,36 @@ export default function SupervisorDashboard() {
   // Handle submit claim
   const handleSubmitClaim = () => {
     router.push('/submit-claim');
+  };
+
+  // Handle approval
+  const handleApprovalClick = (claim: any) => {
+    setSelectedClaim(claim);
+    setShowApprovalModal(true);
+  };
+
+  const handleApprovalSubmit = async (claimId: string, isApproved: boolean, notes?: string) => {
+    try {
+      const action = isApproved ? 'approve' : 'reject';
+      await approveClaim({
+        id: claimId,
+        action,
+        notes,
+        reason: !isApproved ? notes : undefined
+      }).unwrap();
+      
+      toast.success(`Claim ${action}d successfully!`);
+      setShowApprovalModal(false);
+      setSelectedClaim(null);
+    } catch (error: any) {
+      console.error('Approval error:', error);
+      toast.error(error?.data?.error || 'Failed to process approval');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowApprovalModal(false);
+    setSelectedClaim(null);
   };
 
   // Debug logging
@@ -159,11 +196,24 @@ export default function SupervisorDashboard() {
                 <p className="text-red-600">Error loading claims. Please try again.</p>
               </div>
             ) : (
-              <ClaimList claims={claims?.claims || []} />
+              <ClaimList 
+                claims={claims || []} 
+                onApprovalClick={handleApprovalClick}
+                showApprovalButtons={true}
+              />
             )}
           </div>
         </div>
       </div>
+
+      {/* Approval Modal */}
+      {showApprovalModal && selectedClaim && (
+        <ClaimApprovalModal
+          claim={selectedClaim}
+          onClose={handleCloseModal}
+          onApprove={handleApprovalSubmit}
+        />
+      )}
     </div>
   );
 }

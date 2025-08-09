@@ -63,7 +63,7 @@ const canAccessClaim = async (req, res, next) => {
     // Finance manager can access claims that need finance approval or are already approved
     if (user.role === 'finance_manager') {
       // Allow access to claims that need finance approval or are already approved/paid
-      const allowedStatuses = ['both_approved', 'finance_approved', 'paid'];
+      const allowedStatuses = ['approved', 'finance_approved', 'paid'];
       if (allowedStatuses.includes(claim.status)) {
         req.claim = claim;
         return next();

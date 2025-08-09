@@ -113,6 +113,8 @@ const register = async (req, res) => {
       department
     });
 
+    // Set createdBy to self for self-registration
+    user.createdBy = user._id;
     await user.save();
 
     // Generate tokens

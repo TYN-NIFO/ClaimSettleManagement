@@ -1,8 +1,14 @@
 'use client';
 
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Clock, AlertCircle, Eye, Edit } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, AlertCircle, Eye, Edit, ThumbsUp, DollarSign } from 'lucide-react';
+import { useState } from 'react';
+import PaymentModal from './PaymentModal';
+import FinanceApprovalModal from './FinanceApprovalModal';
+import { useMarkPaidMutation, useFinanceApproveMutation } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/lib/store';
 
 interface LineItem {
   _id: string;
@@ -65,10 +71,17 @@ interface Claim {
 
 interface ClaimListProps {
   claims: Claim[];
+  onApprovalClick?: (claim: Claim) => void;
+  showApprovalButtons?: boolean;
 }
 
-export default function ClaimList({ claims }: ClaimListProps) {
+export default function ClaimList({ claims, onApprovalClick, showApprovalButtons = false }: ClaimListProps) {
   const router = useRouter();
+  const { user } = useSelector((state: RootState) => state.auth);
+  const [payingClaim, setPayingClaim] = useState<Claim | null>(null);
+  const [financeApproveClaim, setFinanceApproveClaim] = useState<Claim | null>(null);
+  const [markPaid] = useMarkPaidMutation();
+  const [financeApprove] = useFinanceApproveMutation();
 
   const handleViewClaim = (claimId: string) => {
     router.push(`/claims/${claimId}`);
@@ -76,6 +89,46 @@ export default function ClaimList({ claims }: ClaimListProps) {
 
   const handleEditClaim = (claimId: string) => {
     router.push(`/claims/${claimId}/edit`);
+  };
+
+  const canEditClaim = (claim: Claim): boolean => {
+    if (!user) return false;
+
+    // Admin can edit all claims
+    if (user.role === 'admin') return true;
+
+    // Employees can only edit their own claims if status allows it
+    if (user.role === 'employee') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Supervisors can edit claims from their assigned employees (if they have any assigned)
+    // Note: We can't check assigned employees here since we don't have that data
+    // For now, we'll only allow supervisors to edit their own claims
+    if (user.role === 'supervisor') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Finance managers can see Edit for claims they created, except when already paid
+    if (user.role === 'finance_manager') {
+      return claim.employeeId._id === user._id && claim.status !== 'paid';
+    }
+
+    return false;
+  };
+
+  const canApproveClaim = (claim: Claim): boolean => {
+    if (!user) return false;
+    // Supervisors approve submitted; Finance managers approve supervisor-approved
+    if (user.role === 'supervisor') {
+      return claim.status === 'submitted';
+    }
+    if (user.role === 'finance_manager') {
+      return claim.status === 'approved';
+    }
+    return false;
   };
 
   const getStatusIcon = (status: string) => {
@@ -128,31 +181,41 @@ export default function ClaimList({ claims }: ClaimListProps) {
   };
 
   const getPaymentStatus = (claim: Claim) => {
-    if (claim.payment?.channel) {
+    if (claim.status === 'paid' || claim.payment?.paidAt) {
       return {
-        text: `Paid via ${claim.payment.channel}`,
+        text: 'Paid',
         color: 'bg-green-100 text-green-800',
         icon: <CheckCircle className="h-4 w-4 text-green-500" />
       };
     }
-    
-    if (claim.status === 'finance_approved') {
-      return {
-        text: 'Ready for Payment',
-        color: 'bg-blue-100 text-blue-800',
-        icon: <Clock className="h-4 w-4 text-blue-500" />
-      };
-    }
-    
-    return {
-      text: 'Not Ready',
-      color: 'bg-gray-100 text-gray-800',
-      icon: <AlertCircle className="h-4 w-4 text-gray-500" />
-    };
+    return undefined;
   };
 
   const getFirstLineItem = (claim: Claim) => {
     return claim.lineItems[0] || null;
+  };
+
+  const canMarkAsPaid = (claim: Claim): boolean => {
+    if (!user) return false;
+    return user.role === 'finance_manager' && claim.status === 'finance_approved';
+  };
+
+  const handleMarkAsPaid = async (claimId: string, channel: string) => {
+    try {
+      await markPaid({ id: claimId, channel }).unwrap();
+      setPayingClaim(null);
+    } catch (e) {
+      // swallow; UI can show global toasts if available
+    }
+  };
+
+  const handleFinanceApprove = async (claimId: string, approved: boolean, notes?: string) => {
+    try {
+      await financeApprove({ id: claimId, action: approved ? 'approve' : 'reject', notes }).unwrap();
+      setFinanceApproveClaim(null);
+    } catch (e) {
+      // swallow
+    }
   };
 
   if (claims.length === 0) {
@@ -206,7 +269,7 @@ export default function ClaimList({ claims }: ClaimListProps) {
                   {firstLineItem ? format(new Date(firstLineItem.date), 'MMM dd, yyyy') : 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ₹{claim.grandTotal.toLocaleString()}
+                  ₹{claim.grandTotal?.toLocaleString() || '0'}
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                   {firstLineItem?.description || 'N/A'}
@@ -220,35 +283,88 @@ export default function ClaimList({ claims }: ClaimListProps) {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {getPaymentStatus(claim).icon}
-                    <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatus(claim).color}`}>
-                      {getPaymentStatus(claim).text}
-                    </span>
-                  </div>
+                  {(() => {
+                    const ps = getPaymentStatus(claim);
+                    if (!ps) return <span className="text-sm text-gray-400">-</span>;
+                    return (
+                      <div className="flex items-center">
+                        {ps.icon}
+                        <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${ps.color}`}>
+                          {ps.text}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {format(new Date(claim.createdAt), 'MMM dd, yyyy')}
+                  {claim.createdAt ? format(new Date(claim.createdAt), 'MMM dd, yyyy') : 'N/A'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => handleViewClaim(claim._id)}
-                    className="text-indigo-600 hover:text-indigo-900 mr-2"
-                  >
-                    <Eye className="h-5 w-5" />
-                  </button>
-                  <button
-                    onClick={() => handleEditClaim(claim._id)}
-                    className="text-indigo-600 hover:text-indigo-900"
-                  >
-                    <Edit className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleViewClaim(claim._id)}
+                      className="text-indigo-600 hover:text-indigo-900"
+                      title="View Claim"
+                    >
+                      <Eye className="h-5 w-5" />
+                    </button>
+                    {canEditClaim(claim) && (
+                      <button
+                        onClick={() => handleEditClaim(claim._id)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                        title="Edit Claim"
+                      >
+                        <Edit className="h-5 w-5" />
+                      </button>
+                    )}
+                    {user?.role === 'supervisor' && canApproveClaim(claim) && onApprovalClick && (
+                      <button
+                        onClick={() => onApprovalClick(claim)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Approve/Reject Claim"
+                      >
+                        <ThumbsUp className="h-5 w-5" />
+                      </button>
+                    )}
+                    {user?.role === 'finance_manager' && canApproveClaim(claim) && (
+                      <button
+                        onClick={() => setFinanceApproveClaim(claim)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Finance Approve/Reject"
+                      >
+                        <ThumbsUp className="h-5 w-5" />
+                      </button>
+                    )}
+                    {canMarkAsPaid(claim) && (
+                      <button
+                        onClick={() => setPayingClaim(claim)}
+                        className="text-green-600 hover:text-green-900"
+                        title="Mark as Paid"
+                      >
+                        <DollarSign className="h-5 w-5" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      {payingClaim && (
+        <PaymentModal
+          claim={payingClaim}
+          onClose={() => setPayingClaim(null)}
+          onMarkAsPaid={handleMarkAsPaid}
+        />
+      )}
+      {financeApproveClaim && (
+        <FinanceApprovalModal
+          claim={financeApproveClaim}
+          onClose={() => setFinanceApproveClaim(null)}
+          onApprove={handleFinanceApprove}
+        />
+      )}
     </div>
   );
 }

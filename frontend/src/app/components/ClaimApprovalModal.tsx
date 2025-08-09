@@ -72,14 +72,30 @@ export default function ClaimApprovalModal({ claim, onClose, onApprove }: ClaimA
               <span className="font-medium">Category:</span> {claim.category}
             </div>
             <div>
-              <span className="font-medium">Amount:</span> ${claim.amount.toLocaleString()}
+              <span className="font-medium">Business Unit:</span> {claim.businessUnit || 'N/A'}
             </div>
             <div>
-              <span className="font-medium">Description:</span> {claim.description}
+              <span className="font-medium">Purpose:</span> {claim.purpose || 'N/A'}
             </div>
             <div>
-              <span className="font-medium">Status:</span> {claim.status.replace('_', ' ').toUpperCase()}
+              <span className="font-medium">Grand Total:</span> ₹{claim.grandTotal?.toLocaleString() || '0'}
             </div>
+            <div>
+              <span className="font-medium">Net Payable:</span> ₹{claim.netPayable?.toLocaleString() || '0'}
+            </div>
+            <div>
+              <span className="font-medium">Status:</span> {claim.status?.replace('_', ' ').toUpperCase() || 'N/A'}
+            </div>
+            {claim.lineItems && claim.lineItems.length > 0 && (
+              <div>
+                <span className="font-medium">Line Items:</span> {claim.lineItems.length} item{claim.lineItems.length !== 1 ? 's' : ''}
+              </div>
+            )}
+            {claim.advances && claim.advances.length > 0 && (
+              <div>
+                <span className="font-medium">Advances:</span> {claim.advances.length} advance{claim.advances.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
         </div>
 

@@ -6,20 +6,18 @@ import { X, DollarSign } from 'lucide-react';
 interface PaymentModalProps {
   claim: any;
   onClose: () => void;
-  onMarkAsPaid: (claimId: string, channel: string) => Promise<void>;
+  onMarkAsPaid: (claimId: string, channel?: string) => Promise<void>;
 }
 
 export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentModalProps) {
-  const [channel, setChannel] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!channel) return;
-
     setIsSubmitting(true);
     try {
-      await onMarkAsPaid(claim._id, channel);
+      // Default to a generic channel since UX doesn't ask for one
+      await onMarkAsPaid(claim._id, 'manual');
       onClose();
     } catch (error) {
       console.error('Payment failed:', error);
@@ -49,31 +47,14 @@ export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentMo
           <div className="bg-gray-50 p-3 rounded-md">
             <p className="text-sm"><strong>Employee:</strong> {claim.employeeId?.name}</p>
             <p className="text-sm"><strong>Category:</strong> {claim.category}</p>
-            <p className="text-sm"><strong>Amount:</strong> ${claim.amount.toLocaleString()}</p>
-            <p className="text-sm"><strong>Description:</strong> {claim.description}</p>
+            <p className="text-sm"><strong>Amount:</strong> ₹{(claim.netPayable ?? claim.grandTotal ?? 0).toLocaleString()}</p>
+            {claim.purpose || claim.lineItems?.[0]?.description ? (
+              <p className="text-sm"><strong>Description:</strong> {claim.purpose || claim.lineItems?.[0]?.description}</p>
+            ) : null}
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label htmlFor="channel" className="block text-sm font-medium text-gray-700 mb-2">
-              Payment Channel *
-            </label>
-            <select
-              id="channel"
-              value={channel}
-              onChange={(e) => setChannel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            >
-              <option value="">Select payment channel</option>
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="check">Check</option>
-              <option value="cash">Cash</option>
-              <option value="digital_wallet">Digital Wallet</option>
-            </select>
-          </div>
-
           <div className="flex justify-end space-x-3">
             <button
               type="button"
@@ -84,7 +65,7 @@ export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentMo
             </button>
             <button
               type="submit"
-              disabled={!channel || isSubmitting}
+              disabled={isSubmitting}
               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Processing...' : 'Mark as Paid'}

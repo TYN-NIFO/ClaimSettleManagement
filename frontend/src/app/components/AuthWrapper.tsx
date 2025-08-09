@@ -16,17 +16,17 @@ interface AuthWrapperProps {
 const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrapperProps) => {
   const router = useRouter();
   const dispatch = useDispatch();
-  const { isAuthenticated, user, isLoading } = useSelector((state: RootState) => state.auth);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const { isAuthenticated, user, isLoading, isInitialized: authInitialized } = useSelector((state: RootState) => state.auth);
+  const [componentInitialized, setComponentInitialized] = useState(false);
 
   useEffect(() => {
     // Load stored authentication data on mount
     dispatch(loadStoredAuth());
-    setIsInitialized(true);
+    setComponentInitialized(true);
   }, [dispatch]);
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!componentInitialized || !authInitialized) return;
 
     if (!isAuthenticated) {
       // Not authenticated, redirect to login
@@ -59,7 +59,7 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
     if (token && !authService.isTokenExpired(token)) {
       authService.setupAutoRefresh();
     }
-  }, [isAuthenticated, user, isInitialized, requiredRole, router, redirectTo]);
+  }, [isAuthenticated, user, componentInitialized, authInitialized, requiredRole, router, redirectTo]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -73,7 +73,7 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
   };
 
   // Show loading state while initializing
-  if (!isInitialized || isLoading) {
+  if (!componentInitialized || !authInitialized || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>

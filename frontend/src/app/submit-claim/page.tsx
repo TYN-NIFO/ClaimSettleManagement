@@ -1,11 +1,32 @@
 'use client';
 
 import { useSelector } from 'react-redux';
+import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
 import ImprovedClaimForm from '@/app/components/ImprovedClaimForm';
 
 export default function SubmitClaimPage() {
   const { user } = useSelector((state: RootState) => state.auth);
+  const router = useRouter();
+
+  const handleClose = () => {
+    // Navigate to the user's role-appropriate dashboard
+    switch (user?.role) {
+      case 'admin':
+        router.push('/admin');
+        break;
+      case 'supervisor':
+        router.push('/supervisor');
+        break;
+      case 'finance_manager':
+        router.push('/finance');
+        break;
+      case 'employee':
+      default:
+        router.push('/employee');
+        break;
+    }
+  };
 
   if (!user) {
     return (
@@ -29,7 +50,7 @@ export default function SubmitClaimPage() {
             </p>
           </div>
           <div className="p-6">
-            <ImprovedClaimForm />
+            <ImprovedClaimForm onClose={handleClose} employeeId={user._id} />
           </div>
         </div>
       </div>
