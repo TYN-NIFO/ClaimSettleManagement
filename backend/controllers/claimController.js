@@ -125,11 +125,10 @@ const createClaim = async (req, res) => {
 
     const {
       employeeId,
+      businessUnit,
       category,
-      date,
-      amount,
-      description,
-      attachments
+      advances,
+      lineItems
     } = req.body;
 
     const user = req.user;
@@ -160,20 +159,21 @@ const createClaim = async (req, res) => {
       return res.status(500).json({ error: 'System policy not configured' });
     }
 
-    // Validate category
-    if (!policy.claimCategories.includes(category)) {
-      return res.status(400).json({ error: 'Invalid claim category' });
-    }
+    // Calculate totals using amountInINR for line items
+    const grandTotal = lineItems.reduce((sum, item) => sum + (item.amountInINR || 0), 0);
+    const advancesTotal = advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
+    const netPayable = grandTotal - advancesTotal;
 
     // Create claim
     const claim = new Claim({
       employeeId,
       createdBy: user._id,
+      businessUnit,
       category,
-      date,
-      amount,
-      description,
-      attachments: attachments || []
+      advances,
+      lineItems,
+      grandTotal,
+      netPayable
     });
 
     await claim.save();
@@ -185,7 +185,7 @@ const createClaim = async (req, res) => {
     await createAuditLog(user._id, 'CREATE_CLAIM', 'CLAIM', {
       claimId: claim._id,
       employeeId,
-      amount,
+      grandTotal,
       category
     });
 

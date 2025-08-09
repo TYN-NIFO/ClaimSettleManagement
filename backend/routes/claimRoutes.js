@@ -154,6 +154,83 @@ router.post('/:id/files', auth, upload.array('files', 10), async (req, res) => {
 });
 
 /**
+ * GET /api/claims/stats
+ * Get claim statistics
+ */
+router.get('/stats', auth, async (req, res) => {
+  try {
+    let query = {};
+
+    // Role-based filtering for stats
+    if (req.user.role === 'employee') {
+      query.employeeId = req.user._id;
+    } else if (req.user.role === 'supervisor') {
+      // Supervisors see stats for claims they can approve
+      query.status = { $in: ['submitted', 'approved', 'rejected'] };
+    } else if (req.user.role === 'finance_manager') {
+      query.status = { $in: ['approved', 'finance_approved', 'paid'] };
+    }
+    // Admin sees all stats
+
+    // Get counts by status
+    const statusCounts = await Claim.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$grandTotal' }
+        }
+      }
+    ]);
+
+    // Get total counts
+    const totalClaims = await Claim.countDocuments(query);
+    const totalAmount = await Claim.aggregate([
+      { $match: query },
+      { $group: { _id: null, total: { $sum: '$grandTotal' } } }
+    ]);
+
+    // Get recent claims (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentClaims = await Claim.countDocuments({
+      ...query,
+      createdAt: { $gte: thirtyDaysAgo }
+    });
+
+    // Format the response
+    const stats = {
+      totalClaims,
+      totalAmount: totalAmount[0]?.total || 0,
+      recentClaims,
+      byStatus: {}
+    };
+
+    // Convert status counts to object format
+    statusCounts.forEach(item => {
+      stats.byStatus[item._id] = {
+        count: item.count,
+        totalAmount: item.totalAmount
+      };
+    });
+
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    console.error('Claims stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get claim stats',
+      details: error.message
+    });
+  }
+});
+
+/**
  * GET /api/claims
  * Get claims with role-based filtering
  */

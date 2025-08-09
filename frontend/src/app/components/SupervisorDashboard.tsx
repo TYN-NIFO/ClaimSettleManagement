@@ -14,7 +14,8 @@ import {
   Clock,
   CheckCircle,
   Users,
-  Eye
+  Eye,
+  Plus
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 
@@ -36,6 +37,11 @@ export default function SupervisorDashboard() {
     }
   };
 
+  // Handle submit claim
+  const handleSubmitClaim = () => {
+    router.push('/submit-claim');
+  };
+
   // Debug logging
   console.log('Supervisor Dashboard - User:', user);
   console.log('Supervisor Dashboard - Claims data:', claims);
@@ -54,6 +60,13 @@ export default function SupervisorDashboard() {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={handleSubmitClaim}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Submit Claim
+              </button>
               <div className="flex items-center text-sm text-gray-700">
                 <User className="h-4 w-4 mr-2" />
                 {user?.name}
@@ -92,7 +105,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Amount</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      ${stats.totalAmount?.toLocaleString() || 0}
+                      ₹{stats.totalAmount?.toLocaleString() || 0}
                     </p>
                   </div>
                 </div>
@@ -105,7 +118,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Approved Claims</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.statusStats?.find((s: { _id: string }) => s._id === 'approved')?.count || 0}
+                      {stats.byStatus?.approved?.count || 0}
                     </p>
                   </div>
                 </div>
@@ -118,7 +131,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Pending Review</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.statusStats?.find((s: { _id: string }) => s._id === 'submitted')?.count || 0}
+                      {stats.byStatus?.submitted?.count || 0}
                     </p>
                   </div>
                 </div>

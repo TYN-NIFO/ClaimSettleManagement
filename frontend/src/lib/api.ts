@@ -41,6 +41,11 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
     } else {
       // Refresh failed, logout
       api.dispatch({ type: 'auth/logout' });
+      // Force redirect to login with return URL so user can continue afterwards
+      if (typeof window !== 'undefined') {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?next=${next}`;
+      }
     }
   }
 
@@ -80,6 +85,17 @@ export const api = createApi({
         method: 'PATCH',
         body: profile,
       }),
+    }),
+    uploadAvatar: builder.mutation({
+      query: (file: File) => {
+        const formData = new FormData();
+        formData.append('avatar', file);
+        return {
+          url: '/auth/avatar/',
+          method: 'POST',
+          body: formData,
+        };
+      },
     }),
     checkUsername: builder.mutation({
       query: (email) => ({
@@ -163,6 +179,13 @@ export const api = createApi({
     getClaims: builder.query({
       query: (params = {}) => ({
         url: '/claims',
+        params,
+      }),
+      providesTags: ['Claims'],
+    }),
+    getClaimStats: builder.query({
+      query: (params = {}) => ({
+        url: '/claims/stats',
         params,
       }),
       providesTags: ['Claims'],
@@ -272,6 +295,7 @@ export const {
   useLogoutMutation,
   useGetProfileQuery,
   useUpdateProfileMutation,
+  useUploadAvatarMutation,
   useCheckUsernameMutation,
   useChangePasswordMutation,
   useForgotPasswordMutation,
@@ -292,6 +316,7 @@ export const {
   useFinanceApproveMutation,
   useMarkPaidMutation,
   useDeleteClaimMutation,
+  useGetClaimStatsQuery,
 
   // Users
   useGetUsersQuery,

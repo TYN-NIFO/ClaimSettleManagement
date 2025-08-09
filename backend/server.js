@@ -163,7 +163,6 @@ const connectDB = async (retries = 5) => {
       const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/claims', {
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
-        bufferMaxEntries: 0,
         bufferCommands: false,
       });
       console.log(`MongoDB Connected: ${conn.connection.host}`);

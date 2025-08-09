@@ -21,7 +21,7 @@ import {
   Edit,
   Trash2
 } from 'lucide-react';
-import ClaimBuilder from './ClaimBuilder';
+import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
 
 export default function EmployeeDashboard() {
@@ -128,12 +128,9 @@ export default function EmployeeDashboard() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {showClaimForm ? (
-          <ClaimBuilder
-            onSuccess={(claimId) => {
-              setShowClaimForm(false);
-              // You could show a success message or redirect
-            }}
-            onCancel={() => setShowClaimForm(false)}
+          <ImprovedClaimForm
+            onClose={() => setShowClaimForm(false)}
+            employeeId={user?._id}
           />
         ) : (
           <>

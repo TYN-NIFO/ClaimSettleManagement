@@ -21,9 +21,12 @@ import {
   Eye,
   Edit,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  FolderOpen,
+  Plus
 } from 'lucide-react';
 import PolicyManager from './PolicyManager';
+import CategoryManager from './CategoryManager';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -49,6 +52,11 @@ export default function AdminDashboard() {
       dispatch(logout());
       router.push('/login');
     }
+  };
+
+  // Handle submit claim
+  const handleSubmitClaim = () => {
+    router.push('/submit-claim');
   };
 
   // Calculate statistics
@@ -84,7 +92,8 @@ export default function AdminDashboard() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'users', label: 'Users', icon: Users },
-    { id: 'policy', label: 'Policy', icon: Settings }
+    { id: 'policy', label: 'Policy', icon: Settings },
+    { id: 'categories', label: 'Categories', icon: FolderOpen }
   ];
 
   const renderTabContent = () => {
@@ -350,6 +359,9 @@ export default function AdminDashboard() {
       case 'policy':
         return <PolicyManager />;
 
+      case 'categories':
+        return <CategoryManager />;
+
       default:
         return null;
     }
@@ -369,13 +381,22 @@ export default function AdminDashboard() {
               </div>
             </div>
             
-            <button
-              onClick={handleLogout}
-              className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </button>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleSubmitClaim}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Submit Claim
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>

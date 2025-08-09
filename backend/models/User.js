@@ -2,6 +2,17 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 const userSchema = new mongoose.Schema({
+  // Basic identity fields
+  firstName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  lastName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   name: {
     type: String,
     required: true,
@@ -52,6 +63,21 @@ const userSchema = new mongoose.Schema({
   department: {
     type: String,
     trim: true
+  },
+  companyName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  companyUrl: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  avatarUrl: {
+    type: String,
+    trim: true,
+    default: ''
   },
   // Password reset fields
   resetPasswordToken: {

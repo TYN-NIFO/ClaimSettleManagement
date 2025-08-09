@@ -14,7 +14,8 @@ import {
   Clock,
   CheckCircle,
   CreditCard,
-  TrendingUp
+  TrendingUp,
+  Plus
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 
@@ -36,6 +37,11 @@ export default function FinanceDashboard() {
     }
   };
 
+  // Handle submit claim
+  const handleSubmitClaim = () => {
+    router.push('/submit-claim');
+  };
+
   // Debug logging
   console.log('Finance Dashboard - User:', user);
   console.log('Finance Dashboard - Claims data:', claims);
@@ -54,6 +60,13 @@ export default function FinanceDashboard() {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={handleSubmitClaim}
+                className="flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Submit Claim
+              </button>
               <div className="flex items-center text-sm text-gray-700">
                 <User className="h-4 w-4 mr-2" />
                 {user?.name}
@@ -92,7 +105,7 @@ export default function FinanceDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Amount</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      ${stats.totalAmount?.toLocaleString() || 0}
+                      ₹{stats.totalAmount?.toLocaleString() || 0}
                     </p>
                   </div>
                 </div>

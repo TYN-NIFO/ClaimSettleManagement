@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import multer from 'multer';
+import storageService from '../services/storage.js';
 import RefreshToken from '../models/RefreshToken.js';
 import AuditLog from '../models/AuditLog.js';
 
@@ -325,12 +327,17 @@ const getProfile = async (req, res) => {
   try {
     if (req.method === 'PATCH') {
       // Update profile
-      const { name, email, department } = req.body;
+      const { name, email, department, firstName, lastName, companyName, companyUrl, avatarUrl } = req.body;
       const updates = {};
       
       if (name) updates.name = name;
       if (email) updates.email = email.toLowerCase();
       if (department) updates.department = department;
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (companyName !== undefined) updates.companyName = companyName;
+      if (companyUrl !== undefined) updates.companyUrl = companyUrl;
+      if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl;
 
       const user = await User.findByIdAndUpdate(
         req.user._id,
@@ -358,6 +365,37 @@ const getProfile = async (req, res) => {
     res.status(500).json({ error: 'Profile operation failed' });
   }
 };
+
+// Avatar upload
+const upload = multer({ storage: multer.memoryStorage() });
+const uploadAvatar = [
+  upload.single('avatar'),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      const info = await storageService.save(req.file);
+      const publicUrl = `/uploads/${info.storageKey}`;
+
+      await User.findByIdAndUpdate(req.user._id, { avatarUrl: publicUrl });
+
+      await createAuditLog(req.user._id, 'AVATAR_UPLOAD', 'USER', {
+        fileName: info.name,
+        fileId: info.fileId,
+        storageKey: info.storageKey
+      });
+
+      res.json({
+        message: 'Avatar uploaded successfully',
+        avatarUrl: publicUrl
+      });
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      res.status(500).json({ error: 'Avatar upload failed' });
+    }
+  }
+];
 
 // Check username availability
 const checkUsername = async (req, res) => {
@@ -553,5 +591,6 @@ export {
   forgotPassword,
   resetPassword,
   revokeUserSessions,
+  uploadAvatar,
   createAuditLog
 };

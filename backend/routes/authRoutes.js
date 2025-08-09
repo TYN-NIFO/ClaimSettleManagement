@@ -11,7 +11,8 @@ import {
   revokeUserSessions,
   changePassword,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  uploadAvatar
 } from '../controllers/authController.js';
 import { auth } from '../middleware/auth.js';
 import { requireAdmin } from '../middleware/rbac.js';
@@ -29,6 +30,7 @@ router.post('/logout/', auth, logout);
 router.get('/me/', auth, getProfile);
 router.patch('/me/', auth, getProfile);
 router.post('/change-password/', auth, changePassword);
+router.post('/avatar/', auth, uploadAvatar);
 
 // Username checking
 router.post('/check-username/', checkUsername);

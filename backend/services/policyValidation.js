@@ -1,115 +1,81 @@
 import Policy from '../models/Policy.js';
 
 /**
- * Validate a claim against the current policy
- * @param {Object} claim - The claim object to validate
- * @param {Object} policy - The policy object to validate against
- * @returns {Array} Array of violations
+ * Validate claim against current policy
  */
 export const validateAgainstPolicy = (claim, policy) => {
   const violations = [];
 
-  // Check for missing required documents
-  violations.push(...validateRequiredDocuments(claim, policy));
+  // Basic validation
+  if (!claim.lineItems || claim.lineItems.length === 0) {
+    violations.push({
+      code: 'NO_LINE_ITEMS',
+      message: 'At least one line item is required',
+      level: 'error'
+    });
+  }
 
-  // Check for cap violations
-  violations.push(...validateCaps(claim, policy));
-
-  // Validate mileage calculations
-  violations.push(...validateMileageCalculations(claim, policy));
-
-  return violations;
-};
-
-/**
- * Validate required documents for each line item
- */
-const validateRequiredDocuments = (claim, policy) => {
-  const violations = [];
-
+  // Validate line items
   claim.lineItems.forEach((lineItem, index) => {
-    const requiredDocs = policy.requiredDocuments[lineItem.type] || [];
-    const attachedLabels = lineItem.attachments.map(att => att.label).filter(Boolean);
-    
-    const missingDocs = requiredDocs.filter(doc => !attachedLabels.includes(doc));
-    
-    if (missingDocs.length > 0) {
+    if (!lineItem.description || lineItem.description.trim() === '') {
       violations.push({
-        code: 'missing_docs',
-        message: `Line ${index + 1} (${lineItem.type}): Missing required documents: ${missingDocs.join(', ')}`,
-        level: policy.rulesBehavior.missingDocuments === 'hard' ? 'error' : 'warn',
-        lineIndex: index,
-        missingDocuments: missingDocs
+        code: 'MISSING_DESCRIPTION',
+        message: `Line item ${index + 1} must have a description`,
+        level: 'error'
+      });
+    }
+
+    if (!lineItem.subCategory || lineItem.subCategory.trim() === '') {
+      violations.push({
+        code: 'MISSING_SUBCATEGORY',
+        message: `Line item ${index + 1} must have a sub-category`,
+        level: 'error'
+      });
+    }
+
+    if (!lineItem.amount || lineItem.amount <= 0) {
+      violations.push({
+        code: 'INVALID_AMOUNT',
+        message: `Line item ${index + 1} must have a valid amount`,
+        level: 'error'
+      });
+    }
+
+    if (lineItem.gstTotal < 0) {
+      violations.push({
+        code: 'INVALID_GST',
+        message: `Line item ${index + 1} GST total cannot be negative`,
+        level: 'error'
+      });
+    }
+
+    // Validate that total (amount + gst) is positive
+    const total = (lineItem.amount || 0) + (lineItem.gstTotal || 0);
+    if (total <= 0) {
+      violations.push({
+        code: 'INVALID_TOTAL',
+        message: `Line item ${index + 1} total (amount + GST) must be positive`,
+        level: 'error'
       });
     }
   });
 
-  return violations;
-};
-
-/**
- * Validate meal and lodging caps against city class
- */
-const validateCaps = (claim, policy) => {
-  const violations = [];
-  const cityClass = claim.trip?.cityClass || 'C'; // Default to C class
-
-  claim.lineItems.forEach((lineItem, index) => {
-    if (lineItem.type === 'meal') {
-      const mealCap = policy.mealCaps[cityClass]?.[lineItem.mealType];
-      if (mealCap && lineItem.amount > mealCap) {
-        violations.push({
-          code: 'cap_exceeded',
-          message: `Line ${index + 1} (${lineItem.mealType}): Amount ₹${lineItem.amount} exceeds cap of ₹${mealCap} for city class ${cityClass}`,
-          level: policy.rulesBehavior.capExceeded === 'hard' ? 'error' : 'warn',
-          lineIndex: index,
-          actualAmount: lineItem.amount,
-          capAmount: mealCap
-        });
-      }
+  // Validate advances
+  claim.advances.forEach((advance, index) => {
+    if (!advance.date) {
+      violations.push({
+        code: 'MISSING_ADVANCE_DATE',
+        message: `Advance ${index + 1} must have a date`,
+        level: 'error'
+      });
     }
 
-    if (lineItem.type === 'lodging') {
-      const lodgingCap = policy.lodgingCaps[cityClass];
-      if (lodgingCap && lineItem.amount > lodgingCap) {
-        violations.push({
-          code: 'cap_exceeded',
-          message: `Line ${index + 1} (lodging): Amount ₹${lineItem.amount} exceeds cap of ₹${lodgingCap} for city class ${cityClass}`,
-          level: policy.rulesBehavior.capExceeded === 'hard' ? 'error' : 'warn',
-          lineIndex: index,
-          actualAmount: lineItem.amount,
-          capAmount: lodgingCap
-        });
-      }
-    }
-  });
-
-  return violations;
-};
-
-/**
- * Validate mileage calculations
- */
-const validateMileageCalculations = (claim, policy) => {
-  const violations = [];
-
-  claim.lineItems.forEach((lineItem, index) => {
-    if (lineItem.type === 'mileage') {
-      const expectedAmount = lineItem.kilometers * policy.mileageRate;
-      const tolerance = 0.01; // Allow for small rounding differences
-      
-      if (Math.abs(lineItem.amount - expectedAmount) > tolerance) {
-        violations.push({
-          code: 'mileage_calc',
-          message: `Line ${index + 1} (mileage): Amount ₹${lineItem.amount} should be ₹${expectedAmount} (${lineItem.kilometers}km × ₹${policy.mileageRate}/km)`,
-          level: 'error',
-          lineIndex: index,
-          actualAmount: lineItem.amount,
-          expectedAmount: expectedAmount,
-          kilometers: lineItem.kilometers,
-          rate: policy.mileageRate
-        });
-      }
+    if (!advance.amount || advance.amount <= 0) {
+      violations.push({
+        code: 'INVALID_ADVANCE_AMOUNT',
+        message: `Advance ${index + 1} must have a valid amount`,
+        level: 'error'
+      });
     }
   });
 
@@ -120,44 +86,23 @@ const validateMileageCalculations = (claim, policy) => {
  * Compute totals for a claim
  */
 export const computeClaimTotals = (claim) => {
-  const totalsByHead = {};
   let grandTotal = 0;
 
-  // Calculate totals by account head
+  // Calculate totals using amountInINR
   claim.lineItems.forEach(lineItem => {
-    const head = getAccountHeadForLineType(lineItem.type);
-    totalsByHead[head] = (totalsByHead[head] || 0) + lineItem.amount;
-    grandTotal += lineItem.amount;
+    grandTotal += lineItem.amountInINR || 0;
   });
 
   // Calculate advances total
-  const advancesTotal = claim.advances.reduce((sum, advance) => sum + advance.amount, 0);
+  const advancesTotal = claim.advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
   const netPayable = grandTotal - advancesTotal;
 
   return {
-    totalsByHead,
+    totalsByHead: {}, // Simplified - no account head breakdown
     grandTotal,
     advancesTotal,
     netPayable
   };
-};
-
-/**
- * Get account head for line item type
- */
-const getAccountHeadForLineType = (lineType) => {
-  const headMapping = {
-    flight: 'Business Travel',
-    train: 'Business Travel',
-    local_travel: 'Business Travel',
-    mileage: 'Fuel',
-    meal: 'Business Travel',
-    lodging: 'Business Travel',
-    client_entertainment: 'Business Promotion',
-    admin_misc: 'Admin Exp'
-  };
-
-  return headMapping[lineType] || 'Admin Exp';
 };
 
 /**
@@ -191,14 +136,7 @@ export const createDefaultPolicy = async () => {
     },
     lodgingCaps: { A: 4000, B: 3000, C: 2000 },
     requiredDocuments: {
-      flight: ['airline_invoice', 'mmt_invoice'],
-      train: ['ticket', 'payment_proof'],
-      local_travel: ['receipt_or_reason'],
-      meal: ['restaurant_bill'],
-      lodging: ['hotel_invoice'],
-      client_entertainment: ['bill_or_proof'],
-      mileage: ['route_or_log'],
-      admin_misc: ['supporting_doc']
+      default: ['supporting_doc']
     },
     adminSubCategories: ['printout', 'repairs', 'filing', 'others'],
     rulesBehavior: { 
