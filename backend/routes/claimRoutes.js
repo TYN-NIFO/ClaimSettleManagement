@@ -14,7 +14,22 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 10 // Max 10 files per request
+    files: 10, // Max 10 files per request
+    fieldSize: 10 * 1024 * 1024 // 10MB field size limit
+  },
+  fileFilter: (req, file, cb) => {
+    console.log('Multer processing file:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size
+    });
+    
+    // Accept PDF files
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
   }
 });
 
@@ -139,10 +154,43 @@ router.post('/', auth, async (req, res) => {
  * POST /api/claims/:id/files
  * Upload files for a specific line item
  */
-router.post('/:id/files', auth, upload.array('files', 10), async (req, res) => {
+router.post('/:id/files', auth, (req, res, next) => {
+  upload.array('files', 10)(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer error:', err);
+      return res.status(400).json({
+        success: false,
+        error: 'File upload error',
+        details: err.message
+      });
+    } else if (err) {
+      console.error('File upload error:', err);
+      return res.status(400).json({
+        success: false,
+        error: 'File upload error',
+        details: err.message
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
+    console.log('File upload request received:', {
+      claimId: req.params.id,
+      lineItemId: req.body.lineItemId,
+      filesCount: req.files ? req.files.length : 0,
+      body: req.body
+    });
+
     const { id } = req.params;
     const { lineItemId, labels } = req.body; // labels is array of document labels
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No files were uploaded'
+      });
+    }
 
     const claim = await Claim.findById(id);
     if (!claim) {
@@ -177,6 +225,7 @@ router.post('/:id/files', auth, upload.array('files', 10), async (req, res) => {
     }
 
     const uploadedFiles = [];
+    const failedFiles = [];
     const labelArray = labels ? JSON.parse(labels) : [];
 
     // Process uploaded files
@@ -184,30 +233,90 @@ router.post('/:id/files', auth, upload.array('files', 10), async (req, res) => {
       const file = req.files[i];
       const label = labelArray[i] || 'supporting_doc';
 
+      console.log(`Processing file ${i + 1}:`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        label: label
+      });
+
       try {
         const fileInfo = await storageService.save(file);
         fileInfo.label = label;
 
         lineItem.attachments.push(fileInfo);
         uploadedFiles.push(fileInfo);
+        
+        console.log(`File ${file.originalname} uploaded successfully:`, fileInfo);
       } catch (fileError) {
-        console.error('File upload error:', fileError);
-        // Continue with other files
+        console.error(`File upload error for ${file.originalname}:`, fileError);
+        failedFiles.push({
+          filename: file.originalname,
+          error: fileError.message
+        });
       }
     }
 
     await claim.save();
 
-    res.json({
+    const response = {
       success: true,
-      message: 'Files uploaded successfully',
-      uploadedFiles
-    });
+      message: `Files uploaded successfully. ${uploadedFiles.length} files uploaded, ${failedFiles.length} failed.`,
+      uploadedFiles,
+      failedFiles
+    };
+
+    console.log('File upload response:', response);
+    res.json(response);
   } catch (error) {
     console.error('File upload error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to upload files',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/claims/test-upload
+ * Test file upload endpoint for debugging
+ */
+router.post('/test-upload', upload.array('files', 1), async (req, res) => {
+  try {
+    console.log('Test upload request received');
+    console.log('Files:', req.files);
+    console.log('Body:', req.body);
+    
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No files uploaded'
+      });
+    }
+    
+    const file = req.files[0];
+    console.log('Test file details:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      bufferLength: file.buffer ? file.buffer.length : 0
+    });
+    
+    res.json({
+      success: true,
+      message: 'Test upload successful',
+      file: {
+        name: file.originalname,
+        type: file.mimetype,
+        size: file.size
+      }
+    });
+  } catch (error) {
+    console.error('Test upload error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Test upload failed',
       details: error.message
     });
   }

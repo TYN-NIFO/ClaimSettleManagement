@@ -15,8 +15,16 @@ export class StorageService {
    * Ensure upload directory exists
    */
   ensureUploadDir() {
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true });
+    try {
+      if (!fs.existsSync(this.uploadDir)) {
+        fs.mkdirSync(this.uploadDir, { recursive: true });
+        console.log('Upload directory created:', this.uploadDir);
+      } else {
+        console.log('Upload directory exists:', this.uploadDir);
+      }
+    } catch (error) {
+      console.error('Error creating upload directory:', error);
+      throw error;
     }
   }
 
@@ -26,26 +34,42 @@ export class StorageService {
    * @returns {Promise<{storageKey: string, fileId: string}>}
    */
   async save(file) {
-    const fileId = uuidv4();
-    const extension = path.extname(file.originalname);
-    const storageKey = `${fileId}${extension}`;
-    const filePath = path.join(this.uploadDir, storageKey);
-
-    return new Promise((resolve, reject) => {
-      fs.writeFile(filePath, file.buffer, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            storageKey,
-            fileId,
-            name: file.originalname,
-            size: file.size,
-            mime: file.mimetype
-          });
-        }
+    try {
+      console.log('Storage service saving file:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        bufferLength: file.buffer ? file.buffer.length : 0
       });
-    });
+
+      const fileId = uuidv4();
+      const extension = path.extname(file.originalname);
+      const storageKey = `${fileId}${extension}`;
+      const filePath = path.join(this.uploadDir, storageKey);
+
+      console.log('File will be saved to:', filePath);
+
+      return new Promise((resolve, reject) => {
+        fs.writeFile(filePath, file.buffer, (err) => {
+          if (err) {
+            console.error('Error writing file:', err);
+            reject(err);
+          } else {
+            console.log('File saved successfully:', filePath);
+            resolve({
+              storageKey,
+              fileId,
+              name: file.originalname,
+              size: file.size,
+              mime: file.mimetype
+            });
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Storage service save error:', error);
+      throw error;
+    }
   }
 
   /**
