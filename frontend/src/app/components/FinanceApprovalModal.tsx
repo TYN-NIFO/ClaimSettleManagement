@@ -72,7 +72,7 @@ export default function FinanceApprovalModal({ claim, onClose, onApprove }: Fina
               <span className="font-medium">Category:</span> {claim.category}
             </div>
             <div>
-              <span className="font-medium">Amount:</span> ${claim.amount.toLocaleString()}
+              <span className="font-medium">Amount:</span> ${claim.amount ? claim.amount.toLocaleString() : '0'}
             </div>
             <div>
               <span className="font-medium">Description:</span> {claim.description}

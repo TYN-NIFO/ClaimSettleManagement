@@ -1,5 +1,7 @@
 import express from 'express';
 import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 import { auth } from '../middleware/auth.js';
 import { rbac } from '../middleware/rbac.js';
 import Claim from '../models/Claim.js';
@@ -13,9 +15,9 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: 4 * 1024 * 1024, // 4MB limit for Vercel free tier compatibility
     files: 10, // Max 10 files per request
-    fieldSize: 10 * 1024 * 1024 // 10MB field size limit
+    fieldSize: 4 * 1024 * 1024 // 4MB field size limit
   },
   fileFilter: (req, file, cb) => {
     console.log('Multer processing file:', {
@@ -212,10 +214,21 @@ router.post('/:id/files', auth, (req, res, next) => {
     }
 
     // Check if claim can be modified
-    if (!['submitted', 'rejected'].includes(claim.status)) {
+    // Allow file uploads for claims that are in initial states or rejected
+    // This includes auto-approved claims that were just created
+    const allowedStatuses = ['submitted', 'rejected', 'approved', 'finance_approved', 's1_approved', 's2_approved', 'both_approved'];
+    console.log('Claim status check:', {
+      claimId: claim._id,
+      claimStatus: claim.status,
+      allowedStatuses: allowedStatuses,
+      isAllowed: allowedStatuses.includes(claim.status)
+    });
+    
+    if (!allowedStatuses.includes(claim.status)) {
       return res.status(400).json({
         success: false,
-        error: 'Claim cannot be modified in current status'
+        error: 'Claim cannot be modified in current status',
+        details: `Claim status: ${claim.status}, Allowed statuses: ${allowedStatuses.join(', ')}`
       });
     }
 
@@ -528,7 +541,10 @@ router.patch('/:id', auth, async (req, res) => {
     }
 
     // Check if claim can be modified
-    if (!['submitted', 'rejected'].includes(claim.status)) {
+    // Allow file uploads for claims that are in initial states or rejected
+    // This includes auto-approved claims that were just created
+    const allowedStatuses = ['submitted', 'rejected', 'approved', 'finance_approved'];
+    if (!allowedStatuses.includes(claim.status)) {
       return res.status(400).json({
         success: false,
         error: 'Claim cannot be modified in current status'
@@ -807,6 +823,149 @@ router.post('/:id/pay', auth, rbac(['finance_manager', 'admin']), async (req, re
     res.status(500).json({
       success: false,
       error: 'Failed to mark claim as paid',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/claims/files/debug
+ * Debug endpoint to list all files in the database
+ */
+router.get('/files/debug', auth, async (req, res) => {
+  try {
+    // Allow admin and supervisor access to this debug endpoint
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin or supervisor access required'
+      });
+    }
+    
+    const claims = await Claim.find({});
+    const allFiles = [];
+    
+    claims.forEach(claim => {
+      if (claim.lineItems && Array.isArray(claim.lineItems)) {
+        claim.lineItems.forEach((lineItem, lineItemIndex) => {
+          if (lineItem.attachments && Array.isArray(lineItem.attachments)) {
+            lineItem.attachments.forEach(attachment => {
+              if (attachment && attachment.storageKey) {
+                allFiles.push({
+                  claimId: claim._id,
+                  lineItemIndex,
+                  storageKey: attachment.storageKey,
+                  name: attachment.name,
+                  size: attachment.size
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    res.json({
+      success: true,
+      totalFiles: allFiles.length,
+      files: allFiles
+    });
+  } catch (error) {
+    console.error('Debug endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get debug info',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/files/:storageKey
+ * Serve uploaded files
+ */
+router.get('/files/:storageKey', auth, async (req, res) => {
+  try {
+    const { storageKey } = req.params;
+    
+    console.log('File serving request for storageKey:', storageKey);
+    
+    // Find the file in the database by checking all claims
+    // Use a more specific query to find the exact attachment
+    const claim = await Claim.findOne({
+      'lineItems.attachments': {
+        $elemMatch: {
+          'storageKey': storageKey
+        }
+      }
+    });
+    
+    console.log('Claim found:', claim ? claim._id : 'No claim found');
+    
+    if (!claim) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found in database'
+      });
+    }
+    
+    // Find the specific attachment
+    let attachment = null;
+    let lineItemIndex = -1;
+    
+    for (let i = 0; i < claim.lineItems.length; i++) {
+      const lineItem = claim.lineItems[i];
+      attachment = lineItem.attachments.find(att => att.storageKey === storageKey);
+      if (attachment) {
+        lineItemIndex = i;
+        break;
+      }
+    }
+    
+    console.log('Attachment found:', attachment ? attachment.name : 'No attachment found');
+    
+    if (!attachment) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found in claim attachments'
+      });
+    }
+    
+    // Check if user can access this file
+    if (claim.employeeId.toString() !== req.user._id.toString() && 
+        req.user.role !== 'admin' && 
+        req.user.role !== 'supervisor' && 
+        req.user.role !== 'finance_manager') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to access this file'
+      });
+    }
+    
+    // Get file path
+    const filePath = path.join(process.cwd(), 'uploads', storageKey);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found on disk'
+      });
+    }
+    
+    // Set headers
+    res.setHeader('Content-Type', attachment.mime || 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${attachment.name}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('File serving error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to serve file',
       details: error.message
     });
   }

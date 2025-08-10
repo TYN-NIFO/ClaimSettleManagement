@@ -13,7 +13,7 @@ export default function ClaimViewPage() {
   const params = useParams();
   const router = useRouter();
   const claimId = params.id as string;
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, accessToken } = useSelector((state: RootState) => state.auth);
 
   const { data: claim, isLoading, error } = useGetClaimQuery(claimId);
 
@@ -219,6 +219,146 @@ export default function ClaimViewPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* Attachments */}
+        <div className="mt-8 bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">Attachments</h2>
+          </div>
+          <div className="px-6 py-4">
+            {claim.lineItems?.some((item: any) => item.attachments && item.attachments.length > 0) ? (
+              <div className="space-y-4">
+                {claim.lineItems?.map((item: any, lineIndex: number) => (
+                  item.attachments && item.attachments.length > 0 && (
+                    <div key={lineIndex} className="border rounded-lg p-4">
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">
+                        Line Item {lineIndex + 1}: {item.subCategory}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {item.attachments.map((attachment: any, fileIndex: number) => (
+                          <div key={fileIndex} className="border rounded-lg p-3 bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-medium text-gray-600">
+                                {attachment.label || 'Document'}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {(attachment.size / 1024 / 1024).toFixed(2)} MB
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <div className="flex-shrink-0">
+                                <svg className="h-8 w-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {attachment.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {attachment.mime}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex space-x-2">
+                              <button
+                                onClick={() => {
+                                  // For viewing, we'll use a fetch request to get the file and then open it in a new tab
+                                  if (accessToken) {
+                                    fetch(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, {
+                                      headers: {
+                                        'Authorization': `Bearer ${accessToken}`
+                                      }
+                                    })
+                                    .then(response => {
+                                      if (response.ok) {
+                                        return response.blob();
+                                      }
+                                      throw new Error('Failed to load file');
+                                    })
+                                    .then(blob => {
+                                      const url = window.URL.createObjectURL(blob);
+                                      window.open(url, '_blank');
+                                      // Clean up the URL after a delay
+                                      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+                                    })
+                                    .catch(error => {
+                                      console.error('View failed:', error);
+                                      // Fallback: try to open without auth
+                                      window.open(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, '_blank');
+                                    });
+                                  } else {
+                                    // Fallback: try to open without auth
+                                    window.open(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, '_blank');
+                                  }
+                                }}
+                                className="flex-1 bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 transition-colors"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const link = document.createElement('a');
+                                  link.href = `http://localhost:5000/api/claims/files/${attachment.storageKey}`;
+                                  link.download = attachment.name;
+                                  
+                                  // For download, we need to handle auth differently since we can't set headers on anchor clicks
+                                  // We'll use a fetch request first to get the file with auth, then trigger download
+                                  if (accessToken) {
+                                    fetch(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, {
+                                      headers: {
+                                        'Authorization': `Bearer ${accessToken}`
+                                      }
+                                    })
+                                    .then(response => {
+                                      if (response.ok) {
+                                        return response.blob();
+                                      }
+                                      throw new Error('Failed to download file');
+                                    })
+                                    .then(blob => {
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = attachment.name;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      window.URL.revokeObjectURL(url);
+                                      document.body.removeChild(a);
+                                    })
+                                    .catch(error => {
+                                      console.error('Download failed:', error);
+                                      // Fallback to direct link
+                                      link.click();
+                                    });
+                                  } else {
+                                    // Fallback: try direct link
+                                    link.click();
+                                  }
+                                }}
+                                className="flex-1 bg-gray-600 text-white text-xs px-3 py-1 rounded hover:bg-gray-700 transition-colors"
+                              >
+                                Download
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No attachments</h3>
+                <p className="mt-1 text-sm text-gray-500">No files have been uploaded for this claim.</p>
+              </div>
+            )}
           </div>
         </div>
 

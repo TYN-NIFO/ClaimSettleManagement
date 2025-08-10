@@ -172,6 +172,12 @@ export const api = createApi({
           url: `/claims/${claimId}/files`,
           method: 'POST',
           body: formData,
+          // Don't set Content-Type header - let the browser set it with boundary
+          prepareHeaders: (headers) => {
+            // Remove any Content-Type header to let the browser set it correctly for FormData
+            headers.delete('Content-Type');
+            return headers;
+          },
         };
       },
       invalidatesTags: ['Claims'],

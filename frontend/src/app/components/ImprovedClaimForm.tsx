@@ -155,8 +155,10 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
   };
 
   // Handle file upload - restrict to single PDF
-  const handleFileUpload = (files: FileList | null, lineItemIndex: number) => {
-    if (!files) return;
+  const handleFileUpload = (files: FileList | null, lineItemIndex: number, event?: React.ChangeEvent<HTMLInputElement>) => {
+    if (!files) {
+      return;
+    }
     
     const file = files[0]; // Only take the first file
     
@@ -166,9 +168,16 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       return;
     }
     
-    // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB');
+    // Validate file size (4MB limit for Vercel free tier compatibility)
+    const maxSize = 4 * 1024 * 1024; // 4MB
+    if (file.size > maxSize) {
+      toast.error(`File size must be less than 4MB. Current file size: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      return;
+    }
+    
+    // Additional validation for very small files (likely corrupted)
+    if (file.size < 1024) { // Less than 1KB
+      toast.error('File appears to be too small or corrupted. Please select a valid PDF file.');
       return;
     }
     
@@ -181,6 +190,8 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       ...prev,
       [lineItemIndex]: ['supporting_doc']
     }));
+    
+    toast.success(`File "${file.name}" selected for line item ${lineItemIndex + 1} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
   };
 
   // Remove file from line item
@@ -206,6 +217,12 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       }
       return newLabels;
     });
+    
+    // Reset the file input to allow re-uploading the same file
+    const fileInput = document.getElementById(`file-upload-${lineItemIndex}`) as HTMLInputElement;
+    if (fileInput) {
+      fileInput.value = '';
+    }
   };
 
   // Calculate totals
@@ -234,6 +251,17 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       console.log('Employee ID:', employeeId);
       console.log('Uploaded files:', uploadedFiles);
 
+      // Validate total file size for Vercel compatibility
+      const totalFileSize = Object.values(uploadedFiles).reduce((total, files) => {
+        return total + files.reduce((sum, file) => sum + file.size, 0);
+      }, 0);
+      
+      const maxTotalSize = 4 * 1024 * 1024; // 4MB total limit
+      if (totalFileSize > maxTotalSize) {
+        toast.error(`Total file size (${(totalFileSize / 1024 / 1024).toFixed(2)}MB) exceeds the 4MB limit for Vercel free tier. Please reduce file sizes.`);
+        return;
+      }
+
       // Convert string dates to Date objects for backend
       const processedData = {
         ...data,
@@ -255,7 +283,7 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
         totalsByHead: {} // Calculate based on line item types
       };
 
-      console.log('Submitting claim with data:', claimData);
+
 
       let result;
       if (isEditing && existingClaim) {
@@ -263,28 +291,53 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
           id: existingClaim._id,
           ...claimData
         }).unwrap();
-        console.log('Claim updated successfully:', result);
       } else {
         result = await createClaim(claimData).unwrap();
-        console.log('Claim created successfully:', result);
       }
+      
+      // Extract the claim object from the result
+      const claim = result.claim || result;
       
       // Upload files for each line item if they exist
       const uploadPromises = Object.entries(uploadedFiles).map(async ([lineItemIndex, files]) => {
         if (files.length > 0) {
           const labels = fileLabels[parseInt(lineItemIndex)] || [];
           try {
-            console.log(`Uploading files for line item ${lineItemIndex}:`, files);
-            await uploadClaimFiles({
-              claimId: result._id,
-              lineItemId: result.lineItems[parseInt(lineItemIndex)]._id,
+            // Validate that claim.lineItems exists and has the expected index
+            if (!claim.lineItems || !Array.isArray(claim.lineItems)) {
+              throw new Error('Claim result does not contain lineItems array');
+            }
+            
+            const lineItemIndexNum = parseInt(lineItemIndex);
+            if (lineItemIndexNum < 0 || lineItemIndexNum >= claim.lineItems.length) {
+              throw new Error(`Line item index ${lineItemIndexNum} is out of bounds. Available line items: ${claim.lineItems.length}`);
+            }
+            
+            const lineItem = claim.lineItems[lineItemIndexNum];
+            if (!lineItem || !lineItem._id) {
+              throw new Error(`Line item at index ${lineItemIndexNum} is missing or has no ID`);
+            }
+            
+            const uploadResult = await uploadClaimFiles({
+              claimId: claim._id,
+              lineItemId: lineItem._id,
               files,
               labels
             }).unwrap();
-            console.log(`Files uploaded successfully for line item ${lineItemIndex}`);
-          } catch (error) {
-            console.error('File upload failed for line item', lineItemIndex, error);
-            toast.error(`Failed to upload files for line item ${parseInt(lineItemIndex) + 1}`);
+            
+            // Show detailed upload results
+            if (uploadResult.failedFiles && uploadResult.failedFiles.length > 0) {
+              uploadResult.failedFiles.forEach((failedFile: any) => {
+                toast.error(`Failed to upload ${failedFile.filename}: ${failedFile.error}`);
+              });
+            }
+            
+            if (uploadResult.uploadedFiles && uploadResult.uploadedFiles.length > 0) {
+              toast.success(`Successfully uploaded ${uploadResult.uploadedFiles.length} file(s) for line item ${parseInt(lineItemIndex) + 1}`);
+            }
+          } catch (error: any) {
+            const errorMessage = error?.data?.error || error?.message || 'Unknown upload error';
+            toast.error(`Failed to upload files for line item ${parseInt(lineItemIndex) + 1}: ${errorMessage}`);
           }
         }
       });
@@ -299,7 +352,6 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       }
       onClose();
     } catch (error: unknown) {
-      console.error('Claim submission error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to submit claim';
       toast.error(errorMessage);
     }
@@ -329,6 +381,28 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
             <p>Employee ID: {employeeId || 'Not provided'}</p>
             <p>Line Items: {lineItemFields.length}</p>
             <p>Form Valid: {Object.keys(errors).length === 0 ? 'Yes' : 'No'}</p>
+          </div>
+          
+          {/* File size limit notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-blue-800">
+                  File Upload Limits
+                </h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>• Maximum file size: 4MB per file</p>
+                  <p>• Total upload limit: 4MB per claim</p>
+                  <p>• Only PDF files are allowed</p>
+                  <p className="text-xs mt-1">These limits are set for Vercel free tier compatibility.</p>
+                </div>
+              </div>
+            </div>
           </div>
           {/* Header Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -544,7 +618,7 @@ interface LineItemFormProps {
   watch: any;
   setValue: any;
   selectedCategory: string;
-  handleFileUpload: (files: FileList | null, lineItemIndex: number) => void;
+  handleFileUpload: (files: FileList | null, lineItemIndex: number, event?: React.ChangeEvent<HTMLInputElement>) => void;
   removeFile: (lineItemIndex: number, fileIndex: number) => void;
   uploadedFiles: File[];
 }
@@ -716,16 +790,23 @@ function LineItemForm({
           <input
             type="file"
             accept=".pdf"
-            onChange={(e) => handleFileUpload(e.target.files, index)}
+            onChange={(e) => {
+              handleFileUpload(e.target.files, index, e);
+              // Reset the input value to allow re-uploading the same file
+              e.target.value = '';
+            }}
             className="hidden"
             id={`file-upload-${index}`}
           />
           <label
             htmlFor={`file-upload-${index}`}
-            className="flex items-center px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors cursor-pointer w-full justify-center"
+            className="flex flex-col items-center px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors cursor-pointer w-full justify-center"
           >
-            <Upload className="h-4 w-4 mr-1" />
-            Upload PDF
+            <div className="flex items-center">
+              <Upload className="h-4 w-4 mr-1" />
+              Upload PDF
+            </div>
+            <span className="text-xs text-blue-600 mt-1">Max 4MB</span>
           </label>
           
           {/* Display uploaded files */}
