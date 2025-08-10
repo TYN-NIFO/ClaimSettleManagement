@@ -7,6 +7,12 @@ interface ExchangeRateResponse {
     quote: number;
   };
   date: string;
+  // Some providers include an error object when success is false
+  error?: {
+    code?: number;
+    type?: string;
+    info?: string;
+  };
 }
 
 interface HistoricalRateResponse {
