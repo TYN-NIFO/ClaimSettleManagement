@@ -73,9 +73,10 @@ interface ClaimListProps {
   claims: Claim[];
   onApprovalClick?: (claim: Claim) => void;
   showApprovalButtons?: boolean;
+  showEmployeeName?: boolean;
 }
 
-export default function ClaimList({ claims, onApprovalClick, showApprovalButtons = false }: ClaimListProps) {
+export default function ClaimList({ claims, onApprovalClick, showApprovalButtons = false, showEmployeeName = true }: ClaimListProps) {
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
   const [payingClaim, setPayingClaim] = useState<Claim | null>(null);
@@ -209,9 +210,14 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
     }
   };
 
-  const handleFinanceApprove = async (claimId: string, approved: boolean, notes?: string) => {
+  const handleFinanceApprove = async (claimId: string, approved: boolean, notes?: string, rejectionReason?: string) => {
     try {
-      await financeApprove({ id: claimId, action: approved ? 'approve' : 'reject', notes }).unwrap();
+      await financeApprove({ 
+        id: claimId, 
+        action: approved ? 'approve' : 'reject', 
+        notes,
+        reason: rejectionReason || notes
+      }).unwrap();
       setFinanceApproveClaim(null);
     } catch (e) {
       // swallow
@@ -231,6 +237,11 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
+            {showEmployeeName && (
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Employee
+              </th>
+            )}
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Category
             </th>
@@ -262,6 +273,18 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
             const firstLineItem = getFirstLineItem(claim);
             return (
               <tr key={claim._id} className="hover:bg-gray-50">
+                {showEmployeeName && (
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {claim.employeeId?.name || 'Unknown Employee'}
+                      </div>
+                      <div className="text-gray-500">
+                        {claim.employeeId?.email || 'No email'}
+                      </div>
+                    </div>
+                  </td>
+                )}
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                   {claim.category}
                 </td>

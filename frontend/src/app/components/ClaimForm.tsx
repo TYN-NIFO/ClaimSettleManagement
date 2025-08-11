@@ -10,8 +10,10 @@ import { X, Upload, FileText } from 'lucide-react';
 
 const claimSchema = z.object({
   category: z.string().min(1, 'Category is required'),
+  subCategory: z.string().min(1, 'Sub-category is required'),
   date: z.string().min(1, 'Date is required'),
   amount: z.number().min(0.01, 'Amount must be greater than 0'),
+  gstTotal: z.number().min(0, 'GST must be 0 or greater'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
 });
 
@@ -19,7 +21,7 @@ type ClaimFormData = z.infer<typeof claimSchema>;
 
 interface ClaimFormProps {
   onClose: () => void;
-  employeeId?: string;
+  employeeId: string;
 }
 
 export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
@@ -36,11 +38,18 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
     reset,
   } = useForm<ClaimFormData>({
     resolver: zodResolver(claimSchema),
+    defaultValues: {
+      gstTotal: 0
+    }
   });
+
+  const watchedSubCategory = watch('subCategory');
+  const isFlightTravel = watchedSubCategory?.toLowerCase().includes('flight');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
@@ -49,11 +58,27 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
   const onSubmit = async (data: ClaimFormData) => {
     try {
+      // Validate GST for flight travel
+      if (isFlightTravel && (!data.gstTotal || data.gstTotal <= 0)) {
+        toast.error('GST is mandatory for flight travel expenses');
+        return;
+      }
+
       const claimData = {
         ...data,
         employeeId,
         amount: parseFloat(data.amount.toString()),
+        gstTotal: parseFloat(data.gstTotal.toString()),
         date: new Date(data.date).toISOString(),
+        lineItems: [{
+          date: new Date(data.date),
+          subCategory: data.subCategory,
+          description: data.description,
+          amount: parseFloat(data.amount.toString()),
+          gstTotal: parseFloat(data.gstTotal.toString()),
+          amountInINR: parseFloat(data.amount.toString()) + parseFloat(data.gstTotal.toString()),
+          currency: 'INR'
+        }]
       };
 
       await createClaim(claimData).unwrap();
@@ -66,6 +91,19 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
       toast.error(errorMessage);
     }
   };
+
+  if (policyLoading) {
+    return (
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading policy...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -83,13 +121,13 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category
+              Category *
             </label>
             <select
               {...register('category')}
-              className="input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="">Select a category</option>
+              <option value="">Select Category</option>
               {policy?.claimCategories?.map((category: string) => (
                 <option key={category} value={category}>
                   {category}
@@ -103,12 +141,27 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date
+              Sub-Category *
+            </label>
+            <input
+              {...register('subCategory')}
+              type="text"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="e.g., Flight, Train, Hotel, etc."
+            />
+            {errors.subCategory && (
+              <p className="mt-1 text-sm text-red-600">{errors.subCategory.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date *
             </label>
             <input
               {...register('date')}
               type="date"
-              className="input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {errors.date && (
               <p className="mt-1 text-sm text-red-600">{errors.date.message}</p>
@@ -117,14 +170,14 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amount
+              Amount *
             </label>
             <input
               {...register('amount', { valueAsNumber: true })}
               type="number"
               step="0.01"
               min="0"
-              className="input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="0.00"
             />
             {errors.amount && (
@@ -134,12 +187,36 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+              GST Amount {isFlightTravel && '*'}
+            </label>
+            <input
+              {...register('gstTotal', { valueAsNumber: true })}
+              type="number"
+              step="0.01"
+              min="0"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                isFlightTravel ? 'border-gray-300' : 'border-gray-300'
+              }`}
+              placeholder="0.00"
+            />
+            {errors.gstTotal && (
+              <p className="mt-1 text-sm text-red-600">{errors.gstTotal.message}</p>
+            )}
+            {isFlightTravel && (
+              <p className="mt-1 text-xs text-red-600">
+                * GST is mandatory for flight travel expenses
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description *
             </label>
             <textarea
               {...register('description')}
               rows={4}
-              className="input"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Describe the expense..."
             />
             {errors.description && (
@@ -192,14 +269,14 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-secondary"
+              className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="btn btn-primary"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Submitting...' : 'Submit Claim'}
             </button>

@@ -162,7 +162,10 @@ export default function FinanceDashboard() {
                 <p className="text-red-600">Error loading claims. Please try again.</p>
               </div>
             ) : (
-              <ClaimList claims={claims || []} />
+              <ClaimList 
+                claims={claims || []} 
+                showEmployeeName={true}
+              />
             )}
           </div>
         </div>

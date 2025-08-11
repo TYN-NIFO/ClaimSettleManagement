@@ -55,14 +55,14 @@ export default function SupervisorDashboard() {
     setShowApprovalModal(true);
   };
 
-  const handleApprovalSubmit = async (claimId: string, isApproved: boolean, notes?: string) => {
+  const handleApprovalSubmit = async (claimId: string, isApproved: boolean, notes?: string, rejectionReason?: string) => {
     try {
       const action = isApproved ? 'approve' : 'reject';
       await approveClaim({
         id: claimId,
         action,
         notes,
-        reason: !isApproved ? notes : undefined
+        reason: rejectionReason || notes
       }).unwrap();
       
       toast.success(`Claim ${action}d successfully!`);
@@ -200,6 +200,7 @@ export default function SupervisorDashboard() {
                 claims={claims || []} 
                 onApprovalClick={handleApprovalClick}
                 showApprovalButtons={true}
+                showEmployeeName={true}
               />
             )}
           </div>

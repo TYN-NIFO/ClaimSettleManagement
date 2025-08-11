@@ -28,7 +28,7 @@ const getPolicy = async (req, res) => {
         approvalMode: 'both',
         claimCategories: ['Travel', 'Healthcare', 'Office', 'Training', 'Other'],
         maxAmountBeforeFinanceManager: 10000,
-        allowedFileTypes: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'],
+        allowedFileTypes: ['pdf', 'jpg', 'jpeg', 'png'],
         maxFileSizeMB: 10,
         payoutChannels: ['Bank Transfer', 'Cash', 'Check'],
         autoAssignSupervisors: false,
@@ -41,7 +41,8 @@ const getPolicy = async (req, res) => {
 
     console.log('Policy fetched:', {
       categories: policy.claimCategories,
-      categoriesCount: policy.claimCategories.length
+      categoriesCount: policy.claimCategories.length,
+      allowedFileTypes: policy.allowedFileTypes
     });
 
     res.json(policy);

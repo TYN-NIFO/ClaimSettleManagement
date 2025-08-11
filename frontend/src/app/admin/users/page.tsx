@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
-import { RootState } from '../../../lib/store';
-import { Edit, Trash2, UserPlus } from 'lucide-react';
-import { useGetUsersQuery, useCreateUserMutation, useDeactivateUserMutation } from '../../../lib/api';
+import { RootState } from '@/lib/store';
+import { useGetUsersQuery, useCreateUserMutation, useDeactivateUserMutation } from '@/lib/api';
+import { UserPlus, Trash2, Eye, Edit } from 'lucide-react';
 
 interface User {
   _id: string;
@@ -21,9 +21,19 @@ interface CreateUserForm {
   name: string;
   email: string;
   password: string;
+  confirmPassword: string;
   role: string;
   department: string;
   supervisorLevel?: number;
+}
+
+interface FormErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  department?: string;
+  supervisorLevel?: string;
 }
 
 export default function UserManagement() {
@@ -34,9 +44,11 @@ export default function UserManagement() {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     role: 'employee',
     department: ''
   });
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   // RTK Query hooks
   const { data: users = [], isLoading } = useGetUsersQuery({});
@@ -52,23 +64,89 @@ export default function UserManagement() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Validation function
+  const validateForm = (): boolean => {
+    const errors: FormErrors = {};
+
+    // Name validation
+    if (!createForm.name.trim()) {
+      errors.name = 'Name is required';
+    } else if (createForm.name.trim().length < 2) {
+      errors.name = 'Name must be at least 2 characters';
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!createForm.email.trim()) {
+      errors.email = 'Email is required';
+    } else if (!emailRegex.test(createForm.email)) {
+      errors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (!createForm.password) {
+      errors.password = 'Password is required';
+    } else if (createForm.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters';
+    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(createForm.password)) {
+      errors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+    }
+
+    // Confirm password validation
+    if (!createForm.confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password';
+    } else if (createForm.password !== createForm.confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Department validation
+    if (!createForm.department.trim()) {
+      errors.department = 'Department is required';
+    }
+
+    // Supervisor level validation
+    if (createForm.role === 'supervisor' && (!createForm.supervisorLevel || createForm.supervisorLevel < 1 || createForm.supervisorLevel > 2)) {
+      errors.supervisorLevel = 'Supervisor level must be 1 or 2';
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Prevent duplicate submissions
     if (isSubmitting) return;
     
+    // Validate form
+    if (!validateForm()) {
+      return;
+    }
+    
     setIsSubmitting(true);
     try {
-      await createUser(createForm).unwrap();
+      const userData = {
+        name: createForm.name.trim(),
+        email: createForm.email.trim().toLowerCase(),
+        password: createForm.password,
+        role: createForm.role,
+        department: createForm.department.trim(),
+        supervisorLevel: createForm.role === 'supervisor' ? createForm.supervisorLevel : undefined
+      };
+
+      await createUser(userData).unwrap();
       setShowCreateForm(false);
       setCreateForm({
         name: '',
         email: '',
         password: '',
+        confirmPassword: '',
         role: 'employee',
         department: ''
       });
+      setFormErrors({});
+      alert('User created successfully!');
     } catch (error: unknown) {
       let errorMessage = 'Error creating user';
       
@@ -96,8 +174,18 @@ export default function UserManagement() {
     
     try {
       await deactivateUser(userId).unwrap();
+      alert('User deactivated successfully!');
     } catch (error: unknown) {
       console.error('Error deactivating user:', error);
+      alert('Error deactivating user. Please try again.');
+    }
+  };
+
+  const handleInputChange = (field: keyof CreateUserForm, value: string | number) => {
+    setCreateForm(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (formErrors[field as keyof FormErrors]) {
+      setFormErrors(prev => ({ ...prev, [field]: undefined }));
     }
   };
 
@@ -138,82 +226,91 @@ export default function UserManagement() {
         </div>
       </header>
 
+      {/* Users Table */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Users Table */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <div className="bg-white shadow overflow-hidden sm:rounded-md">
+          <div className="px-4 py-5 sm:px-6">
             <h2 className="text-lg font-medium text-gray-900">All Users</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage system users and their roles
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                                 {users.map((user: User) => (
-                  <tr key={user._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{user.email}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                        user.role === 'finance_manager' ? 'bg-purple-100 text-purple-800' :
-                        user.role === 'supervisor' ? 'bg-blue-100 text-blue-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
-                        {user.role.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{user.department || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
-                        {user.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button className="text-blue-600 hover:text-blue-900 mr-3">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      {user.isActive && (
-                        <button 
-                          onClick={() => handleDeactivateUser(user._id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </td>
+          <div className="border-t border-gray-200">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {users.map((user: User) => (
+                    <tr key={user._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {user.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.email}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                          user.role === 'finance_manager' ? 'bg-purple-100 text-purple-800' :
+                          user.role === 'supervisor' ? 'bg-green-100 text-green-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {user.role.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {user.department || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {user.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleDeactivateUser(user._id)}
+                            className="text-red-600 hover:text-red-900"
+                            title="Deactivate User"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -227,40 +324,74 @@ export default function UserManagement() {
               <form onSubmit={handleCreateUser}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
+                    <label className="block text-sm font-medium text-gray-700">Name *</label>
                     <input
                       type="text"
                       required
                       value={createForm.name}
-                      onChange={(e) => setCreateForm({...createForm, name: e.target.value})}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.name ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter full name"
                     />
+                    {formErrors.name && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.name}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
+                    <label className="block text-sm font-medium text-gray-700">Email *</label>
                     <input
                       type="email"
                       required
                       value={createForm.email}
-                      onChange={(e) => setCreateForm({...createForm, email: e.target.value})}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.email ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter email address"
                     />
+                    {formErrors.email && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.email}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <label className="block text-sm font-medium text-gray-700">Password *</label>
                     <input
                       type="password"
                       required
                       value={createForm.password}
-                      onChange={(e) => setCreateForm({...createForm, password: e.target.value})}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      onChange={(e) => handleInputChange('password', e.target.value)}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.password ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Minimum 6 characters"
                     />
+                    {formErrors.password && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.password}</p>
+                    )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                    <label className="block text-sm font-medium text-gray-700">Confirm Password *</label>
+                    <input
+                      type="password"
+                      required
+                      value={createForm.confirmPassword}
+                      onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Confirm password"
+                    />
+                    {formErrors.confirmPassword && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.confirmPassword}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Role *</label>
                     <select
                       value={createForm.role}
-                      onChange={(e) => setCreateForm({...createForm, role: e.target.value})}
+                      onChange={(e) => handleInputChange('role', e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                     >
                       <option value="employee">Employee</option>
@@ -270,43 +401,66 @@ export default function UserManagement() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Department</label>
+                    <label className="block text-sm font-medium text-gray-700">Department *</label>
                     <input
                       type="text"
+                      required
                       value={createForm.department}
-                      onChange={(e) => setCreateForm({...createForm, department: e.target.value})}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      onChange={(e) => handleInputChange('department', e.target.value)}
+                      className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                        formErrors.department ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="Enter department"
                     />
+                    {formErrors.department && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.department}</p>
+                    )}
                   </div>
                   {createForm.role === 'supervisor' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Supervisor Level</label>
+                      <label className="block text-sm font-medium text-gray-700">Supervisor Level *</label>
                       <select
                         value={createForm.supervisorLevel || 1}
-                        onChange={(e) => setCreateForm({...createForm, supervisorLevel: parseInt(e.target.value)})}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        onChange={(e) => handleInputChange('supervisorLevel', parseInt(e.target.value))}
+                        className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                          formErrors.supervisorLevel ? 'border-red-300' : 'border-gray-300'
+                        }`}
                       >
                         <option value={1}>Level 1</option>
                         <option value={2}>Level 2</option>
                       </select>
+                      {formErrors.supervisorLevel && (
+                        <p className="mt-1 text-sm text-red-600">{formErrors.supervisorLevel}</p>
+                      )}
                     </div>
                   )}
                 </div>
                 <div className="mt-6 flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => setShowCreateForm(false)}
+                    onClick={() => {
+                      setShowCreateForm(false);
+                      setFormErrors({});
+                      setCreateForm({
+                        name: '',
+                        email: '',
+                        password: '',
+                        confirmPassword: '',
+                        role: 'employee',
+                        department: ''
+                      });
+                    }}
                     className="bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400"
                   >
                     Cancel
                   </button>
-                                     <button
-                     type="submit"
-                     disabled={isSubmitting}
-                     className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                   >
-                     {isSubmitting ? 'Creating...' : 'Create User'}
-                   </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? 'Creating...' : 'Create User'}
+                  </button>
                 </div>
               </form>
             </div>

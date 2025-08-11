@@ -230,7 +230,7 @@ export const api = createApi({
     }),
     financeApprove: builder.mutation({
       query: ({ id, action, reason, notes }) => ({
-        url: `/claims/${id}/finance`,
+        url: `/claims/${id}/finance-approve`,
         method: 'POST',
         body: { action, reason, notes },
       }),
