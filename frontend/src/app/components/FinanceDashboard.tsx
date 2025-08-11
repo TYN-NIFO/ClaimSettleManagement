@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useGetClaimStatsQuery } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useFinanceApproveMutation } from '@/lib/api';
 import authService from '@/lib/authService';
 import { 
   LogOut, 
@@ -18,6 +18,8 @@ import {
   Plus
 } from 'lucide-react';
 import ClaimList from './ClaimList';
+import FinanceApprovalModal from './FinanceApprovalModal';
+import { toast } from 'react-hot-toast';
 
 export default function FinanceDashboard() {
   const { user } = useSelector((state: RootState) => state.auth);
@@ -25,6 +27,11 @@ export default function FinanceDashboard() {
   const claims = claimsData?.claims || [];
   const { data: stats, isLoading: statsLoading } = useGetClaimStatsQuery({});
   const router = useRouter();
+  const [financeApprove] = useFinanceApproveMutation();
+  
+  // Modal state
+  const [selectedClaim, setSelectedClaim] = useState(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Handle logout
   const handleLogout = async () => {
@@ -40,6 +47,36 @@ export default function FinanceDashboard() {
   // Handle submit claim
   const handleSubmitClaim = () => {
     router.push('/submit-claim');
+  };
+
+  // Handle finance approval
+  const handleApprovalClick = (claim: any) => {
+    setSelectedClaim(claim);
+    setShowApprovalModal(true);
+  };
+
+  const handleApprovalSubmit = async (claimId: string, isApproved: boolean, notes?: string, rejectionReason?: string) => {
+    try {
+      const action = isApproved ? 'approve' : 'reject';
+      await financeApprove({
+        id: claimId,
+        action,
+        notes,
+        reason: rejectionReason || notes
+      }).unwrap();
+      
+      toast.success(`Claim ${action}d successfully!`);
+      setShowApprovalModal(false);
+      setSelectedClaim(null);
+    } catch (error: any) {
+      console.error('Finance approval error:', error);
+      toast.error(error?.data?.error || 'Failed to process finance approval');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowApprovalModal(false);
+    setSelectedClaim(null);
   };
 
   // Debug logging
@@ -164,12 +201,23 @@ export default function FinanceDashboard() {
             ) : (
               <ClaimList 
                 claims={claims || []} 
+                onApprovalClick={handleApprovalClick}
+                showApprovalButtons={true}
                 showEmployeeName={true}
               />
             )}
           </div>
         </div>
       </div>
+
+      {/* Finance Approval Modal */}
+      {showApprovalModal && selectedClaim && (
+        <FinanceApprovalModal
+          claim={selectedClaim}
+          onClose={handleCloseModal}
+          onApprove={handleApprovalSubmit}
+        />
+      )}
     </div>
   );
 }

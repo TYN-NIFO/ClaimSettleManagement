@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCreateClaimMutation, useUpdateClaimMutation, useGetPolicyQuery, useUploadClaimFilesMutation } from '../../lib/api';
+import { useCreateClaimMutation, useUpdateClaimMutation, useGetPolicyQuery, useUploadClaimFileMutation } from '../../lib/api';
 import { 
   categoryMaster, 
   businessUnits, 
@@ -19,6 +19,13 @@ import {
   Plus,
   ArrowLeft
 } from 'lucide-react';
+
+// Type for existing file objects
+interface ExistingFile extends File {
+  isExisting: boolean;
+  fileId: string;
+  storageKey: string;
+}
 
 // Currency options
 const currencies = ['INR', 'USD', 'EUR'] as const;
@@ -71,7 +78,7 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
   
   const [createClaim, { isLoading: isCreatingClaim }] = useCreateClaimMutation();
   const [updateClaim, { isLoading: isUpdatingClaim }] = useUpdateClaimMutation();
-  const [uploadClaimFiles, { isLoading: isUploadingFiles }] = useUploadClaimFilesMutation();
+  const [uploadClaimFile, { isLoading: isUploadingFiles }] = useUploadClaimFileMutation();
   const { data: policy, isLoading: policyLoading } = useGetPolicyQuery({});
 
   const schema = createClaimSchema();
@@ -124,6 +131,43 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       
       reset(claimData);
       setSelectedCategory(existingClaim.category || '');
+      
+      // Load existing files into the form state
+      const existingFiles: { [key: number]: File[] } = {};
+      const existingLabels: { [key: number]: string[] } = {};
+      
+      existingClaim.lineItems?.forEach((item: any, index: number) => {
+        if (item.attachments && item.attachments.length > 0) {
+          // Create mock File objects for existing attachments (for display purposes)
+          const mockFiles = item.attachments.map((attachment: any) => {
+            // Create a custom object that mimics a File but allows property modification
+            const mockFile = {
+              name: attachment.name,
+              type: attachment.mime || 'application/octet-stream',
+              size: attachment.size || 0,
+              lastModified: Date.now(),
+              webkitRelativePath: '',
+              // Custom properties to track this is an existing file
+              isExisting: true,
+              fileId: attachment.fileId,
+              storageKey: attachment.storageKey,
+              // Add File-like methods if needed
+              arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+              slice: () => new Blob(),
+              stream: () => new ReadableStream(),
+              text: () => Promise.resolve('')
+            } as ExistingFile;
+            
+            return mockFile;
+          });
+          
+          existingFiles[index] = mockFiles;
+          existingLabels[index] = item.attachments.map(() => 'supporting_doc');
+        }
+      });
+      
+      setUploadedFiles(existingFiles);
+      setFileLabels(existingLabels);
     }
   }, [isEditing, existingClaim, reset]);
 
@@ -154,7 +198,7 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
     appendLineItem(newLineItem);
   };
 
-  // Handle file upload - restrict to single PDF
+  // Handle file upload - single file per line item (replaces existing)
   const handleFileUpload = (files: FileList | null, lineItemIndex: number, event?: React.ChangeEvent<HTMLInputElement>) => {
     if (!files) {
       return;
@@ -162,9 +206,10 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
     
     const file = files[0]; // Only take the first file
     
-    // Validate file type
-    if (file.type !== 'application/pdf') {
-      toast.error('Only PDF files are allowed');
+    // Validate file type - allow PDF, JPG, JPEG, PNG
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Only PDF, JPG, JPEG, and PNG files are allowed');
       return;
     }
     
@@ -177,11 +222,15 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
     
     // Additional validation for very small files (likely corrupted)
     if (file.size < 1024) { // Less than 1KB
-      toast.error('File appears to be too small or corrupted. Please select a valid PDF file.');
+      toast.error('File appears to be too small or corrupted. Please select a valid file.');
       return;
     }
     
-    // Replace existing files with new file (single file only)
+    // Check if replacing existing file
+    const existingFiles = uploadedFiles[lineItemIndex] || [];
+    const isReplacing = existingFiles.length > 0;
+    
+    // Replace existing file with new file (single file only)
     setUploadedFiles(prev => ({
       ...prev,
       [lineItemIndex]: [file]
@@ -191,7 +240,11 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       [lineItemIndex]: ['supporting_doc']
     }));
     
-    toast.success(`File "${file.name}" selected for line item ${lineItemIndex + 1} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+    const message = isReplacing 
+      ? `🔄 File replaced for line item ${lineItemIndex + 1}: "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)}MB)`
+      : `✅ File attached to line item ${lineItemIndex + 1}: "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)}MB)`;
+    
+    toast.success(message);
   };
 
   // Remove file from line item
@@ -251,11 +304,21 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
       console.log('Employee ID:', employeeId);
       console.log('Uploaded files:', uploadedFiles);
 
-      // Validate total file size for Vercel compatibility
-      const totalFileSize = Object.values(uploadedFiles).reduce((total, files) => {
-        return total + files.reduce((sum, file) => sum + file.size, 0);
-      }, 0);
+      // Prepare files array and mapping
+      const allFiles: File[] = [];
+      const fileMapping: { [fileName: string]: number } = {};
       
+      Object.entries(uploadedFiles).forEach(([lineItemIndex, files]) => {
+        files.forEach((file) => {
+          fileMapping[file.name] = parseInt(lineItemIndex);
+          // Add all files (existing and new) - the API will filter out existing ones
+          allFiles.push(file as File);
+        });
+      });
+
+      // Validate total file size for Vercel compatibility (only count new files)
+      const newFiles = allFiles.filter(file => !(file as ExistingFile).isExisting);
+      const totalFileSize = newFiles.reduce((total, file) => total + file.size, 0);
       const maxTotalSize = 4 * 1024 * 1024; // 4MB total limit
       if (totalFileSize > maxTotalSize) {
         toast.error(`Total file size (${(totalFileSize / 1024 / 1024).toFixed(2)}MB) exceeds the 4MB limit for Vercel free tier. Please reduce file sizes.`);
@@ -283,76 +346,50 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
         totalsByHead: {} // Calculate based on line item types
       };
 
-
-
       let result;
       if (isEditing && existingClaim) {
+        // For editing, send files with the claim update
         result = await updateClaim({
           id: existingClaim._id,
-          ...claimData
+          claimData,
+          files: allFiles,
+          fileMapping
         }).unwrap();
       } else {
-        result = await createClaim(claimData).unwrap();
+        // For new claims, send files with the claim creation
+        result = await createClaim({
+          claimData,
+          files: allFiles,
+          fileMapping
+        }).unwrap();
       }
-      
-      // Extract the claim object from the result
-      const claim = result.claim || result;
-      
-      // Upload files for each line item if they exist
-      const uploadPromises = Object.entries(uploadedFiles).map(async ([lineItemIndex, files]) => {
-        if (files.length > 0) {
-          const labels = fileLabels[parseInt(lineItemIndex)] || [];
-          try {
-            // Validate that claim.lineItems exists and has the expected index
-            if (!claim.lineItems || !Array.isArray(claim.lineItems)) {
-              throw new Error('Claim result does not contain lineItems array');
-            }
-            
-            const lineItemIndexNum = parseInt(lineItemIndex);
-            if (lineItemIndexNum < 0 || lineItemIndexNum >= claim.lineItems.length) {
-              throw new Error(`Line item index ${lineItemIndexNum} is out of bounds. Available line items: ${claim.lineItems.length}`);
-            }
-            
-            const lineItem = claim.lineItems[lineItemIndexNum];
-            if (!lineItem || !lineItem._id) {
-              throw new Error(`Line item at index ${lineItemIndexNum} is missing or has no ID`);
-            }
-            
-            const uploadResult = await uploadClaimFiles({
-              claimId: claim._id,
-              lineItemId: lineItem._id,
-              files,
-              labels
-            }).unwrap();
-            
-            // Show detailed upload results
-            if (uploadResult.failedFiles && uploadResult.failedFiles.length > 0) {
-              uploadResult.failedFiles.forEach((failedFile: any) => {
-                toast.error(`Failed to upload ${failedFile.filename}: ${failedFile.error}`);
-              });
-            }
-            
-            if (uploadResult.uploadedFiles && uploadResult.uploadedFiles.length > 0) {
-              toast.success(`Successfully uploaded ${uploadResult.uploadedFiles.length} file(s) for line item ${parseInt(lineItemIndex) + 1}`);
-            }
-          } catch (error: any) {
-            const errorMessage = error?.data?.error || error?.message || 'Unknown upload error';
-            toast.error(`Failed to upload files for line item ${parseInt(lineItemIndex) + 1}: ${errorMessage}`);
-          }
-        }
-      });
 
-      await Promise.all(uploadPromises);
-
-      toast.success(isEditing ? 'Claim updated successfully!' : 'Claim submitted successfully!');
+      const newFileCount = newFiles.length;
+      const existingFileCount = allFiles.length - newFileCount;
+      const successMessage = isEditing 
+        ? `Claim updated successfully!${newFileCount > 0 ? ` ${newFileCount} file(s) replaced.` : ''}${existingFileCount > 0 && newFileCount === 0 ? ` ${existingFileCount} existing file(s) preserved.` : ''}` 
+        : `Claim submitted successfully!${newFileCount > 0 ? ` ${newFileCount} file(s) attached.` : ''}`;
+      
+      toast.success(successMessage);
+      
       if (!isEditing) {
         reset();
         setUploadedFiles({});
         setFileLabels({});
       }
       onClose();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to submit claim';
+    } catch (error: any) {
+      console.error('Claim submission error:', error);
+      let errorMessage = 'Failed to submit claim';
+      
+      if (error?.data?.error) {
+        errorMessage = error.data.error;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       toast.error(errorMessage);
     }
   };
@@ -395,12 +432,12 @@ export default function ImprovedClaimForm({ onClose, employeeId, existingClaim, 
                 <h3 className="text-sm font-medium text-blue-800">
                   File Upload Limits
                 </h3>
-                <div className="mt-2 text-sm text-blue-700">
-                  <p>• Maximum file size: 4MB per file</p>
-                  <p>• Total upload limit: 4MB per claim</p>
-                  <p>• Only PDF files are allowed</p>
-                  <p className="text-xs mt-1">These limits are set for Vercel free tier compatibility.</p>
-                </div>
+                                 <div className="mt-2 text-sm text-blue-700">
+                   <p>• Maximum file size: 4MB per file</p>
+                   <p>• Total upload limit: 4MB per claim</p>
+                   <p>• Allowed file types: PDF, JPG, JPEG, PNG</p>
+                   <p className="text-xs mt-1">These limits are set for Vercel free tier compatibility.</p>
+                 </div>
               </div>
             </div>
           </div>
@@ -675,9 +712,12 @@ function LineItemForm({
         </button>
       </div>
 
-      {/* Basic fields in a single line */}
-      <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-4">
+      {/* Basic fields with proper labels */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Date *
+          </label>
           <Controller
             name={`lineItems.${index}.date`}
             control={control}
@@ -690,12 +730,15 @@ function LineItemForm({
           )}
         </div>
         <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Sub-category *
+          </label>
           <Controller
             name={`lineItems.${index}.subCategory`}
             control={control}
             render={({ field }) => (
               <select {...field} className="input">
-                <option value="">Sub-category</option>
+                <option value="">Select sub-category</option>
                 {selectedCategory && getSubCategoriesForCategory(selectedCategory).map(sub => (
                   <option key={sub.name} value={sub.name}>{sub.name}</option>
                 ))}
@@ -707,6 +750,9 @@ function LineItemForm({
           )}
         </div>
         <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Currency *
+          </label>
           <Controller
             name={`lineItems.${index}.currency`}
             control={control}
@@ -723,6 +769,9 @@ function LineItemForm({
           )}
         </div>
         <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Base Amount ({watchedCurrency || 'INR'}) *
+          </label>
           <Controller
             name={`lineItems.${index}.amount`}
             control={control}
@@ -731,8 +780,8 @@ function LineItemForm({
                 {...field} 
                 type="number" 
                 step="0.01" 
-                placeholder="Amount" 
-                className="input"
+                placeholder={`Enter amount in ${watchedCurrency || 'INR'}`}
+                className="input text-lg font-medium"
                 onChange={(e) => field.onChange(Number(e.target.value) || 0)}
               />
             )}
@@ -741,7 +790,14 @@ function LineItemForm({
             <p className="text-xs text-red-600 mt-1">{errors.lineItems[index]?.amount?.message}</p>
           )}
         </div>
+      </div>
+
+      {/* GST and totals row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            GST Amount ({watchedCurrency || 'INR'})
+          </label>
           <Controller
             name={`lineItems.${index}.gstTotal`}
             control={control}
@@ -750,7 +806,7 @@ function LineItemForm({
                 {...field} 
                 type="number" 
                 step="0.01" 
-                placeholder="GST" 
+                placeholder={`GST in ${watchedCurrency || 'INR'}`}
                 className="input"
                 onChange={(e) => field.onChange(Number(e.target.value) || 0)}
               />
@@ -760,15 +816,21 @@ function LineItemForm({
             <p className="text-xs text-red-600 mt-1">{errors.lineItems[index]?.gstTotal?.message}</p>
           )}
         </div>
-        <div className="flex items-center justify-center">
-          <span className="text-sm font-medium text-gray-700">
-            Total: {formatCurrency(lineItemTotal, watchedCurrency || 'INR')}
-          </span>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Line Item Total
+          </label>
+          <div className="input bg-gray-50 text-lg font-bold text-blue-600 flex items-center">
+            {formatCurrency(lineItemTotal, watchedCurrency || 'INR')}
+          </div>
         </div>
-        <div className="flex items-center justify-center">
-          <span className="text-sm text-gray-600">
-            INR: {formatCurrency(watch(`lineItems.${index}.amountInINR`) || 0, 'INR')}
-          </span>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Amount in INR
+          </label>
+          <div className="input bg-green-50 text-lg font-bold text-green-600 flex items-center">
+            {formatCurrency(watch(`lineItems.${index}.amountInINR`) || 0, 'INR')}
+          </div>
         </div>
       </div>
 
@@ -787,9 +849,12 @@ function LineItemForm({
           )}
         </div>
         <div className="flex flex-col space-y-2">
+          <label className="block text-xs font-medium text-gray-700 mb-1">
+            Supporting Document
+          </label>
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,.jpg,.jpeg,.png"
             onChange={(e) => {
               handleFileUpload(e.target.files, index, e);
               // Reset the input value to allow re-uploading the same file
@@ -800,30 +865,60 @@ function LineItemForm({
           />
           <label
             htmlFor={`file-upload-${index}`}
-            className="flex flex-col items-center px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors cursor-pointer w-full justify-center"
+            className={`flex flex-col items-center px-3 py-2 text-sm rounded-md transition-colors cursor-pointer w-full justify-center border-2 border-dashed ${
+              uploadedFiles.length > 0 
+                ? 'bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100' 
+                : 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
+            }`}
           >
             <div className="flex items-center">
               <Upload className="h-4 w-4 mr-1" />
-              Upload PDF
+              {uploadedFiles.length > 0 ? 'Replace File' : 'Upload File'}
             </div>
-            <span className="text-xs text-blue-600 mt-1">Max 4MB</span>
+            <span className="text-xs mt-1">
+              {uploadedFiles.length > 0 ? 'One file per line item' : 'PDF, JPG, PNG (Max 4MB)'}
+            </span>
           </label>
           
           {/* Display uploaded files */}
           {uploadedFiles.length > 0 && (
             <div className="space-y-1">
-              {uploadedFiles.map((file, fileIndex) => (
-                <div key={fileIndex} className="flex items-center justify-between bg-gray-50 p-2 rounded text-xs">
-                  <span className="truncate flex-1">{file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(index, fileIndex)}
-                    className="text-red-500 hover:text-red-700 ml-2"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+              {uploadedFiles.map((file, fileIndex) => {
+                const isExisting = (file as ExistingFile).isExisting;
+                const fileSize = file.size; // Now we can safely access size
+                return (
+                  <div key={fileIndex} className={`flex items-center justify-between p-2 rounded text-xs border ${
+                    isExisting 
+                      ? 'bg-blue-50 border-blue-200' 
+                      : 'bg-green-50 border-green-200'
+                  }`}>
+                    <div className="flex items-center flex-1">
+                      <FileText className={`h-4 w-4 mr-2 ${
+                        isExisting ? 'text-blue-600' : 'text-green-600'
+                      }`} />
+                      <span className={`truncate font-medium ${
+                        isExisting ? 'text-blue-800' : 'text-green-800'
+                      }`}>
+                        {file.name}
+                        {isExisting && <span className="ml-1 text-xs">(existing)</span>}
+                      </span>
+                      <span className={`ml-2 ${
+                        isExisting ? 'text-blue-600' : 'text-green-600'
+                      }`}>
+                        ({fileSize ? (fileSize / 1024 / 1024).toFixed(2) : '0.00'}MB)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index, fileIndex)}
+                      className="text-red-500 hover:text-red-700 ml-2 p-1"
+                      title="Remove file"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -873,7 +968,7 @@ function AdvanceForm({ index, control, errors, onRemove }: AdvanceFormProps) {
           name={`advances.${index}.amount`}
           control={control}
           render={({ field }) => (
-            <input {...field} type="number" step="0.01" placeholder="Amount" className="input" />
+            <input {...field} type="number" step="any" placeholder="Amount" className="input" />
           )}
         />
       </div>

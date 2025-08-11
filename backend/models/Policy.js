@@ -13,7 +13,19 @@ const PolicySchema = new mongoose.Schema({
   },
   claimCategories: {
     type: [String],
-    default: ['Travel', 'Healthcare', 'Office', 'Training', 'Other']
+    default: [
+      'Travel & Lodging',
+      'Client Entertainment & Business Meals',
+      'Employee Welfare & HR',
+      'Training & Development',
+      'Marketing & Business Development',
+      'Subscriptions & Memberships',
+      'Office & Admin',
+      'IT & Software',
+      'Project / Client-Billable Expenses',
+      'Finance, Legal & Compliance',
+      'Advances & Reconciliations'
+    ]
   },
   maxAmountBeforeFinanceManager: {
     type: Number,

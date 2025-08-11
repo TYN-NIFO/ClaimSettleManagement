@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useCreateClaimMutation, useGetPolicyQuery } from '../../lib/api';
+import { useCreateClaimMutation, useGetPolicyQuery, useUploadClaimFileMutation } from '../../lib/api';
 import toast from 'react-hot-toast';
 import { X, Upload, FileText } from 'lucide-react';
 
@@ -27,13 +27,8 @@ interface ClaimFormProps {
 export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [createClaim, { isLoading }] = useCreateClaimMutation();
+  const [uploadClaimFile] = useUploadClaimFileMutation();
   const { data: policy, isLoading: policyLoading, error: policyError } = useGetPolicyQuery({});
-
-  // Debug logging
-  console.log('Policy data:', policy);
-  console.log('Policy loading:', policyLoading);
-  console.log('Policy error:', policyError);
-  console.log('Categories:', policy?.claimCategories);
 
   const {
     register,
@@ -48,6 +43,15 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
     }
   });
 
+  // Debug logging
+  console.log('Policy data:', policy);
+  console.log('Policy loading:', policyLoading);
+  console.log('Policy error:', policyError);
+  console.log('Categories:', policy?.claimCategories);
+  console.log('Allowed file types:', policy?.allowedFileTypes);
+  console.log('Accept attribute:', policy?.allowedFileTypes?.map((type: string) => `.${type}`).join(','));
+  console.log('Selected category:', watch('category'));
+
   const watchedSubCategory = watch('subCategory');
   const isFlightTravel = watchedSubCategory?.toLowerCase().includes('flight');
 
@@ -58,37 +62,84 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
   const onSubmit = async (data: ClaimFormData) => {
     try {
+      console.log('Form data received:', data);
+      console.log('Description length:', data.description?.length);
+      console.log('Category selected:', data.category);
+      console.log('Files to upload:', files);
+      
       // Validate GST for flight travel
       if (isFlightTravel && (!data.gstTotal || data.gstTotal <= 0)) {
         toast.error('GST is mandatory for flight travel expenses');
         return;
       }
 
+      // Validate that at least one file is uploaded
+      if (files.length === 0) {
+        toast.error('At least one file attachment is required');
+        return;
+      }
+
+      // Validate that at least one PDF is included
+      const hasPdf = files.some(file => file.name.toLowerCase().endsWith('.pdf'));
+      if (!hasPdf) {
+        toast.error('At least one PDF attachment is required');
+        return;
+      }
+
       const claimData = {
         ...data,
         employeeId,
-        amount: parseFloat(data.amount.toString()),
-        gstTotal: parseFloat(data.gstTotal.toString()),
+        amount: Number(data.amount) || 0,
+        gstTotal: Number(data.gstTotal) || 0,
         date: new Date(data.date).toISOString(),
         lineItems: [{
           date: new Date(data.date),
           subCategory: data.subCategory,
           description: data.description,
-          amount: parseFloat(data.amount.toString()),
-          gstTotal: parseFloat(data.gstTotal.toString()),
-          amountInINR: parseFloat(data.amount.toString()) + parseFloat(data.gstTotal.toString()),
-          currency: 'INR'
+          amount: Number(data.amount) || 0,
+          gstTotal: Number(data.gstTotal) || 0,
+          amountInINR: (Number(data.amount) || 0) + (Number(data.gstTotal) || 0),
+          currency: 'INR',
+          attachments: [] // Will be populated after file uploads
         }]
       };
 
-      await createClaim(claimData).unwrap();
-      toast.success('Claim submitted successfully!');
+      console.log('Submitting claim data:', claimData);
+      
+      // Step 1: Create the claim
+      const createdClaim = await createClaim(claimData).unwrap();
+      console.log('Claim created:', createdClaim);
+
+      // Step 2: Upload files to the created claim
+      const uploadPromises = files.map(async (file) => {
+        return uploadClaimFile({
+          claimId: createdClaim._id,
+          file: file
+        }).unwrap();
+      });
+
+      await Promise.all(uploadPromises);
+      console.log('All files uploaded successfully');
+
+      toast.success('Claim submitted successfully with attachments!');
       reset();
       setFiles([]);
       onClose();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to submit claim';
-      toast.error(errorMessage);
+    } catch (error: any) {
+      console.error('Claim submission error:', error);
+      
+      // Handle validation errors from backend
+      if (error?.data?.violations && Array.isArray(error.data.violations)) {
+        error.data.violations.forEach((violation: any) => {
+          toast.error(`${violation.field}: ${violation.message}`);
+        });
+      } else if (error?.data?.message) {
+        toast.error(error.data.message);
+      } else if (error?.message) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to submit claim');
+      }
     }
   };
 
@@ -99,6 +150,24 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-2 text-gray-600">Loading policy...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (policyError) {
+    return (
+      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="text-center">
+            <p className="text-red-600">Failed to load policy. Please try again.</p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>
@@ -128,7 +197,19 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Select Category</option>
-              {policy?.claimCategories?.map((category: string) => (
+                             {(policy?.claimCategories || [
+                 'Travel & Lodging',
+                 'Client Entertainment & Business Meals',
+                 'Employee Welfare & HR',
+                 'Training & Development',
+                 'Marketing & Business Development',
+                 'Subscriptions & Memberships',
+                 'Office & Admin',
+                 'IT & Software',
+                 'Project / Client-Billable Expenses',
+                 'Finance, Legal & Compliance',
+                 'Advances & Reconciliations'
+               ]).map((category: string) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
@@ -175,7 +256,7 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
             <input
               {...register('amount', { valueAsNumber: true })}
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="0.00"
@@ -192,7 +273,7 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
             <input
               {...register('gstTotal', { valueAsNumber: true })}
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                 isFlightTravel ? 'border-gray-300' : 'border-gray-300'
@@ -226,7 +307,7 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Attachments (Optional)
+              Attachments *
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
               <input
@@ -235,7 +316,7 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
                 onChange={handleFileChange}
                 className="hidden"
                 id="file-upload"
-                accept={policy?.allowedFileTypes?.map((type: string) => `.${type}`).join(',')}
+                accept={policy?.allowedFileTypes?.map((type: string) => `.${type}`).join(',') || '.pdf,.jpg,.jpeg,.png'}
               />
               <label
                 htmlFor="file-upload"
@@ -247,6 +328,9 @@ export default function ClaimForm({ onClose, employeeId }: ClaimFormProps) {
                 </span>
                 <span className="text-xs text-gray-500 mt-1">
                   Max size: {policy?.maxFileSizeMB}MB
+                </span>
+                <span className="text-xs text-red-500 mt-1">
+                  * At least one PDF file is required
                 </span>
               </label>
             </div>

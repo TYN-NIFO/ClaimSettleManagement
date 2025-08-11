@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
-import { useGetClaimQuery, useMarkPaidMutation } from '@/lib/api';
+import { useGetClaimQuery, useMarkPaidMutation, useDeleteClaimMutation } from '@/lib/api';
 import { RootState } from '@/lib/store';
 import { format } from 'date-fns';
-import { ArrowLeft, Edit, DollarSign } from 'lucide-react';
+import { ArrowLeft, Edit, DollarSign, Trash2 } from 'lucide-react';
 import PaymentModal from '@/app/components/PaymentModal';
+import toast from 'react-hot-toast';
 
 export default function ClaimViewPage() {
   const params = useParams();
@@ -18,7 +19,9 @@ export default function ClaimViewPage() {
   const { data: claim, isLoading, error } = useGetClaimQuery(claimId);
 
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [markPaid, { isLoading: isMarkingPaid }] = useMarkPaidMutation();
+  const [deleteClaim] = useDeleteClaimMutation();
 
   const canEditClaim = (claim: any): boolean => {
     if (!user || !claim) return false;
@@ -51,6 +54,31 @@ export default function ClaimViewPage() {
     return user.role === 'finance_manager' && claim.status === 'finance_approved';
   };
 
+  const canDeleteClaim = (claim: any): boolean => {
+    if (!user || !claim) return false;
+
+    // Admin can delete any claim
+    if (user.role === 'admin') return true;
+
+    // Employee can delete own claims if not approved
+    if (user.role === 'employee') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Supervisor can delete manageable claims before finance approval
+    if (user.role === 'supervisor') {
+      return ['submitted', 'approved', 'rejected'].includes(claim.status);
+    }
+
+    // Finance manager can delete any claim before payment
+    if (user.role === 'finance_manager') {
+      return ['submitted', 'approved', 'finance_approved', 'rejected'].includes(claim.status);
+    }
+
+    return false;
+  };
+
   const handleMarkAsPaid = async (id: string, channel?: string) => {
     try {
       await markPaid({ id, channel: channel || 'manual' }).unwrap();
@@ -58,6 +86,35 @@ export default function ClaimViewPage() {
     } catch (e) {
       // Error is surfaced via toast/UI elsewhere if implemented
       // Keeping silent here to avoid disrupting UX
+    }
+  };
+
+  const handleDeleteClaim = async () => {
+    if (!claim) return;
+    
+    if (!confirm('Are you sure you want to delete this claim? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const result = await deleteClaim(claimId).unwrap();
+      toast.success(result.message || 'Claim deleted successfully');
+      
+      // Navigate back to appropriate dashboard
+      const dashboardRoutes = {
+        employee: '/employee',
+        supervisor: '/supervisor', 
+        finance_manager: '/finance',
+        admin: '/admin'
+      };
+      
+      const route = dashboardRoutes[user?.role as keyof typeof dashboardRoutes] || '/employee';
+      router.push(route);
+    } catch (error: any) {
+      const errorMessage = error?.data?.error || error?.message || 'Failed to delete claim';
+      toast.error(errorMessage);
+      setIsDeleting(false);
     }
   };
 
@@ -121,6 +178,16 @@ export default function ClaimViewPage() {
               >
                 <DollarSign className="h-4 w-4 mr-2" />
                 {isMarkingPaid ? 'Processing...' : 'Mark as Paid'}
+              </button>
+            )}
+            {canDeleteClaim(claim) && (
+              <button
+                onClick={handleDeleteClaim}
+                disabled={isDeleting}
+                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {isDeleting ? 'Deleting...' : 'Delete Claim'}
               </button>
             )}
           </div>

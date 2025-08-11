@@ -21,7 +21,19 @@ const testPolicy = async () => {
       // Create default policy
       policy = new Policy({
         approvalMode: 'both',
-        claimCategories: ['Travel', 'Healthcare', 'Office', 'Training', 'Other'],
+        claimCategories: [
+          'Travel & Lodging',
+          'Client Entertainment & Business Meals',
+          'Employee Welfare & HR',
+          'Training & Development',
+          'Marketing & Business Development',
+          'Subscriptions & Memberships',
+          'Office & Admin',
+          'IT & Software',
+          'Project / Client-Billable Expenses',
+          'Finance, Legal & Compliance',
+          'Advances & Reconciliations'
+        ],
         maxAmountBeforeFinanceManager: 10000,
         allowedFileTypes: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'],
         maxFileSizeMB: 10,

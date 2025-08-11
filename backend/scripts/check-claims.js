@@ -1,59 +1,72 @@
 import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import Claim from '../models/Claim.js';
 import User from '../models/User.js';
-import dotenv from 'dotenv';
-dotenv.config({ path: './config.env' });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config({ path: path.join(__dirname, '..', 'config.production.env') });
 
 const checkClaims = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Connect to database
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/claims');
+    console.log('Connected to MongoDB');
+
+    // Get all claims with employee details
+    const claims = await Claim.find({})
+      .populate('employeeId', 'name email role')
+      .sort({ createdAt: -1 });
+
+    console.log(`\n=== Total Claims: ${claims.length} ===`);
+    
+    claims.forEach((claim, index) => {
+      console.log(`\n${index + 1}. Claim ID: ${claim._id}`);
+      console.log(`   Employee: ${claim.employeeId?.name} (${claim.employeeId?.email})`);
+      console.log(`   Employee Role: ${claim.employeeId?.role}`);
+      console.log(`   Status: ${claim.status}`);
+      console.log(`   Category: ${claim.category}`);
+      console.log(`   Amount: ₹${claim.grandTotal}`);
+      console.log(`   Created: ${claim.createdAt}`);
+      console.log(`   Created By: ${claim.createdBy}`);
     });
-    console.log('✅ Connected to MongoDB');
 
-    // Get all claims
-    const allClaims = await Claim.find({}).populate('employeeId', 'name email role');
-    console.log(`📊 Total claims in database: ${allClaims.length}`);
+    // Check users
+    console.log('\n=== Users ===');
+    const users = await User.find({}).select('name email role');
+    users.forEach(user => {
+      console.log(`- ${user.name} (${user.email}) - Role: ${user.role}`);
+    });
 
-    if (allClaims.length > 0) {
-      console.log('\n📋 Claims details:');
-      allClaims.forEach((claim, index) => {
-        console.log(`${index + 1}. ID: ${claim._id}`);
-        console.log(`   Employee: ${claim.employeeId?.name} (${claim.employeeId?.role})`);
-        console.log(`   Category: ${claim.category}`);
-        console.log(`   Amount: $${claim.amount}`);
-        console.log(`   Status: ${claim.status}`);
-        console.log(`   Created: ${claim.createdAt}`);
-        console.log('---');
-      });
+    // Check supervisor assignments
+    console.log('\n=== Supervisor Assignments ===');
+    const supervisors = await User.find({ role: 'supervisor' }).select('name email');
+    for (const supervisor of supervisors) {
+      const assignedEmployees = await User.find({
+        $or: [
+          { assignedSupervisor1: supervisor._id },
+          { assignedSupervisor2: supervisor._id }
+        ]
+      }).select('name email');
+      
+      console.log(`\nSupervisor: ${supervisor.name} (${supervisor.email})`);
+      console.log('Assigned Employees:');
+      if (assignedEmployees.length === 0) {
+        console.log('  - No employees assigned');
+      } else {
+        assignedEmployees.forEach(emp => {
+          console.log(`  - ${emp.name} (${emp.email})`);
+        });
+      }
     }
 
-    // Get all users
-    const allUsers = await User.find({}).select('name email role');
-    console.log(`\n👥 Total users in database: ${allUsers.length}`);
-    
-    console.log('\n📋 Users by role:');
-    const usersByRole = {};
-    allUsers.forEach(user => {
-      if (!usersByRole[user.role]) {
-        usersByRole[user.role] = [];
-      }
-      usersByRole[user.role].push(user);
-    });
-
-    Object.entries(usersByRole).forEach(([role, users]) => {
-      console.log(`${role}: ${users.length} users`);
-      users.forEach(user => {
-        console.log(`  - ${user.name} (${user.email})`);
-      });
-    });
-
-    console.log('\n🎉 Claims check completed successfully');
     process.exit(0);
   } catch (error) {
-    console.error('❌ Check error:', error);
+    console.error('Error:', error);
     process.exit(1);
   }
 };

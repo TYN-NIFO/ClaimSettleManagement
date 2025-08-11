@@ -8,7 +8,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
 import { 
   useCreateClaimMutation, 
-  useUploadClaimFilesMutation, 
+  useUploadClaimFileMutation, 
   useGetPolicyQuery 
 } from '@/lib/api';
 import { z } from 'zod';
@@ -66,7 +66,7 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
   const [createClaim] = useCreateClaimMutation();
-  const [uploadFiles] = useUploadClaimFilesMutation();
+  const [uploadFile] = useUploadClaimFileMutation();
   const { data: policy } = useGetPolicyQuery({});
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -182,15 +182,14 @@ export default function ClaimBuilder({ onSuccess, onCancel }: ClaimBuilderProps)
       
       // Upload files if any
       if (uploadedFiles.length > 0 && result.claimId) {
-        // Group files by line item (for now, attach to first line item)
-        const lineItemId = result.claim.lineItems[0]?._id;
-        if (lineItemId) {
-          await uploadFiles({
-            claimId: result.claimId,
-            lineItemId,
-            files: uploadedFiles,
-            labels: fileLabels
-          });
+        // Upload files one by one since backend expects single file uploads
+        if (uploadedFiles.length > 0) {
+          for (const file of uploadedFiles) {
+            await uploadFile({
+              claimId: result.claimId,
+              file: file
+            }).unwrap();
+          }
         }
       }
 

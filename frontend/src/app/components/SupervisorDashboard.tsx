@@ -15,7 +15,8 @@ import {
   CheckCircle,
   Users,
   Eye,
-  Plus
+  Plus,
+  RefreshCw
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 import ClaimApprovalModal from './ClaimApprovalModal';
@@ -23,15 +24,26 @@ import { toast } from 'react-hot-toast';
 
 export default function SupervisorDashboard() {
   const { user } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError, refetch: refetchClaims } = useGetClaimsQuery({});
   const claims = claimsData?.claims || [];
-  const { data: stats, isLoading: statsLoading } = useGetClaimStatsQuery({});
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetClaimStatsQuery({});
   const router = useRouter();
   const [approveClaim] = useApproveClaimMutation();
   
   // Modal state
   const [selectedClaim, setSelectedClaim] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    try {
+      await Promise.all([refetchClaims(), refetchStats()]);
+      toast.success('Data refreshed successfully!');
+    } catch (error) {
+      console.error('Refresh error:', error);
+      toast.error('Failed to refresh data');
+    }
+  };
 
   // Handle logout
   const handleLogout = async () => {
@@ -83,6 +95,9 @@ export default function SupervisorDashboard() {
   console.log('Supervisor Dashboard - User:', user);
   console.log('Supervisor Dashboard - Claims data:', claims);
   console.log('Supervisor Dashboard - Claims loading:', claimsLoading);
+  console.log('Supervisor Dashboard - Claims error:', claimsError);
+  console.log('Supervisor Dashboard - Claims count:', claims.length);
+  console.log('Supervisor Dashboard - Full claims data:', claimsData);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -103,6 +118,14 @@ export default function SupervisorDashboard() {
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Submit Claim
+              </button>
+              <button
+                onClick={handleRefresh}
+                disabled={claimsLoading || statsLoading}
+                className="flex items-center px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${(claimsLoading || statsLoading) ? 'animate-spin' : ''}`} />
+                Refresh
               </button>
               <div className="flex items-center text-sm text-gray-700">
                 <User className="h-4 w-4 mr-2" />
@@ -155,7 +178,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Approved Claims</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.byStatus?.approved?.count || 0}
+                      {stats.statusStats?.find(s => s._id === 'approved')?.count || 0}
                     </p>
                   </div>
                 </div>
@@ -168,7 +191,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Pending Review</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.byStatus?.submitted?.count || 0}
+                      {stats.statusStats?.find(s => s._id === 'submitted')?.count || 0}
                     </p>
                   </div>
                 </div>
@@ -184,6 +207,13 @@ export default function SupervisorDashboard() {
             <p className="mt-1 text-sm text-gray-500">
               Review and approve claims from your team members
             </p>
+            {/* Debug Info */}
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+              <strong>Debug Info:</strong> Total Claims: {claimsData?.total || 0} | 
+              Claims Array Length: {claims.length} | 
+              Loading: {claimsLoading ? 'Yes' : 'No'} | 
+              Error: {claimsError ? 'Yes' : 'No'}
+            </div>
           </div>
           <div className="border-t border-gray-200">
             {claimsLoading ? (

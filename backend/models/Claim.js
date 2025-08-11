@@ -32,6 +32,11 @@ const ClaimSchema = new mongoose.Schema({
     ref: 'User', 
     required: true 
   },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
   businessUnit: { 
     type: String, 
     enum: ['Alliance', 'Coinnovation', 'General'], 
@@ -69,6 +74,10 @@ const ClaimSchema = new mongoose.Schema({
       enum: ['warn', 'error'] 
     }
   }],
+  attachments: { 
+    type: [AttachmentSchema], 
+    default: [] 
+  },
   
   // Approval/Rejection tracking
   supervisorApproval: {

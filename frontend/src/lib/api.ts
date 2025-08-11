@@ -146,30 +146,41 @@ export const api = createApi({
 
     // Claims
     createClaim: builder.mutation({
-      query: (claim) => ({
-        url: '/claims',
-        method: 'POST',
-        body: claim,
-      }),
+      query: ({ claimData, files, fileMapping }) => {
+        const formData = new FormData();
+        formData.append('claimData', JSON.stringify(claimData));
+        formData.append('fileMapping', JSON.stringify(fileMapping || {}));
+        
+        // Add files to form data
+        if (files && files.length > 0) {
+          files.forEach((file: File) => {
+            formData.append('files', file);
+          });
+        }
+        
+        return {
+          url: '/claims',
+          method: 'POST',
+          body: formData,
+          prepareHeaders: (headers: Headers) => {
+            // Remove Content-Type header to let browser set it with boundary
+            headers.delete('Content-Type');
+            return headers;
+          },
+        };
+      },
       invalidatesTags: ['Claims'],
     }),
-    uploadClaimFiles: builder.mutation({
-      query: ({ claimId, lineItemId, files, labels }: {
+    uploadClaimFile: builder.mutation({
+      query: ({ claimId, file }: {
         claimId: string;
-        lineItemId: string;
-        files: File[];
-        labels: string[];
+        file: File;
       }) => {
         const formData = new FormData();
-        formData.append('lineItemId', lineItemId);
-        formData.append('labels', JSON.stringify(labels));
+        formData.append('file', file);
         
-        files.forEach((file: File) => {
-          formData.append('files', file);
-        });
-
         return {
-          url: `/claims/${claimId}/files`,
+          url: `/claims/${claimId}/upload`,
           method: 'POST',
           body: formData,
           // Don't set Content-Type header - let the browser set it with boundary
@@ -207,11 +218,39 @@ export const api = createApi({
       providesTags: (result, error, id) => [{ type: 'Claims', id }],
     }),
     updateClaim: builder.mutation({
-      query: ({ id, ...claim }) => ({
-        url: `/claims/${id}`,
-        method: 'PATCH',
-        body: claim,
-      }),
+      query: ({ id, claimData, files, fileMapping, ...claim }) => {
+        // If files are provided, use FormData
+        if (files && files.length > 0) {
+          const formData = new FormData();
+          formData.append('claimData', JSON.stringify(claimData || claim));
+          formData.append('fileMapping', JSON.stringify(fileMapping || {}));
+          
+          // Add files to form data
+          files.forEach((file: File) => {
+            // Only add new files (not existing ones)
+            if (!(file as any).isExisting) {
+              formData.append('files', file);
+            }
+          });
+          
+          return {
+            url: `/claims/${id}`,
+            method: 'PATCH',
+            body: formData,
+            prepareHeaders: (headers: Headers) => {
+              headers.delete('Content-Type');
+              return headers;
+            },
+          };
+        } else {
+          // No files, use regular JSON
+          return {
+            url: `/claims/${id}`,
+            method: 'PATCH',
+            body: claimData || claim,
+          };
+        }
+      },
       invalidatesTags: (result, error, { id }) => [
         { type: 'Claims', id },
         'Claims',
@@ -241,7 +280,7 @@ export const api = createApi({
     }),
     markPaid: builder.mutation({
       query: ({ id, channel, reference }) => ({
-        url: `/claims/${id}/pay`,
+        url: `/claims/${id}/mark-paid`,
         method: 'POST',
         body: { channel, reference },
       }),
@@ -289,18 +328,18 @@ export const api = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+    resetUserPassword: builder.mutation({
+      query: ({ id, password }) => ({
+        url: `/users/${id}/reset-password`,
+        method: 'PATCH',
+        body: { password },
+      }),
+      invalidatesTags: ['Users'],
+    }),
     deleteUser: builder.mutation({
       query: (id) => ({
         url: `/users/${id}`,
         method: 'DELETE',
-      }),
-      invalidatesTags: ['Users'],
-    }),
-    resetUserPassword: builder.mutation({
-      query: ({ id, password }) => ({
-        url: `/users/${id}/reset-password`,
-        method: 'POST',
-        body: { password },
       }),
       invalidatesTags: ['Users'],
     }),
@@ -327,7 +366,7 @@ export const {
 
   // Claims
   useCreateClaimMutation,
-  useUploadClaimFilesMutation,
+  useUploadClaimFileMutation,
   useGetClaimsQuery,
   useGetClaimQuery,
   useUpdateClaimMutation,
@@ -342,6 +381,6 @@ export const {
   useCreateUserMutation,
   useUpdateUserMutation,
   useDeactivateUserMutation,
-  useDeleteUserMutation,
   useResetUserPasswordMutation,
+  useDeleteUserMutation,
 } = api;

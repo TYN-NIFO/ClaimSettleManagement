@@ -16,7 +16,8 @@
     "assign-supervisors": "node scripts/assign-supervisors.js",
     "update-supervisor-level": "node scripts/update-supervisor-level.js",
     "create-finance-manager": "node scripts/create-finance-manager.js",
-    "validate-prod": "node scripts/deploy-production.js"
+    "validate-prod": "node scripts/deploy-production.js",
+    "reset-policy": "node scripts/reset-policy.js"
   },
   "dependencies": {
     "applicationinsights": "^2.9.2",

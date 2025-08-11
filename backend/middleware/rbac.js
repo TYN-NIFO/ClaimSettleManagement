@@ -68,6 +68,11 @@ const canAccessClaim = async (req, res, next) => {
         req.claim = claim;
         return next();
       }
+      // Also allow finance managers to access their own claims regardless of status
+      if (claim.employeeId.toString() === user._id.toString()) {
+        req.claim = claim;
+        return next();
+      }
     }
 
     return res.status(403).json({ error: 'Access denied to this claim' });

@@ -53,8 +53,9 @@ const getClaims = async (req, res) => {
 
     const claims = await Claim.find(filter)
       .populate('employeeId', 'name email')
-      .populate('createdBy', 'name email')
-      .populate('paid.paidBy', 'name email')
+      .populate('supervisorApproval.approvedBy', 'name email')
+      .populate('financeApproval.approvedBy', 'name email')
+      .populate('payment.paidBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
@@ -84,9 +85,9 @@ const getClaimById = async (req, res) => {
   try {
     const claim = await Claim.findById(req.params.id)
       .populate('employeeId', 'name email department')
-      .populate('createdBy', 'name email')
-      .populate('paid.paidBy', 'name email')
-      .populate('timeline.by', 'name email');
+      .populate('supervisorApproval.approvedBy', 'name email')
+      .populate('financeApproval.approvedBy', 'name email')
+      .populate('payment.paidBy', 'name email');
 
     if (!claim) {
       return res.status(404).json({ error: 'Claim not found' });
@@ -163,7 +164,7 @@ const createClaim = async (req, res) => {
     await claim.save();
 
     // Add timeline entry
-    await claim.addTimelineEntry(user._id, 'CREATED', 'Claim submitted');
+    // await claim.addTimelineEntry(user._id, 'CREATED', 'Claim submitted');
 
     // Create audit log
     await createAuditLog(user._id, 'CREATE_CLAIM', 'CLAIM', {
@@ -208,7 +209,8 @@ const approveClaim = async (req, res) => {
     // Default to supervisor level 1 if not set
     const supervisorLevel = user.supervisorLevel || 1;
     
-    if (!claim.canBeApprovedBySupervisor(supervisorLevel)) {
+    // Check if claim is in a state that can be approved
+    if (claim.status !== 'submitted') {
       return res.status(400).json({ error: 'Claim cannot be approved at this stage' });
     }
 
@@ -218,40 +220,22 @@ const approveClaim = async (req, res) => {
     }
 
     if (action === 'approve') {
-      if (supervisorLevel === 1) {
-        claim.status = 's1_approved';
-        claim.approvals.supervisor1At = new Date();
-        claim.notes.supervisor = notes || '';
-        
-        // Check if both supervisors approved or policy allows single approval
-        const User = (await import('../models/User.js')).default;
-        const employee = await User.findById(claim.employeeId);
-        if (policy.approvalMode === 'any' || !employee?.assignedSupervisor2) {
-          claim.status = 'both_approved';
-        }
-      } else if (supervisorLevel === 2) {
-        claim.status = 's2_approved';
-        claim.approvals.supervisor2At = new Date();
-        claim.notes.supervisor = notes || '';
-        
-        // Check if both supervisors approved
-        if (claim.approvals.supervisor1At) {
-          claim.status = 'both_approved';
-        } else {
-          // If no supervisor level 1 approval, check if policy allows single approval
-          const User = (await import('../models/User.js')).default;
-          const employee = await User.findById(claim.employeeId);
-          if (policy.approvalMode === 'any' || !employee?.assignedSupervisor1) {
-            claim.status = 'both_approved';
-          }
-        }
-      }
-
-      await claim.addTimelineEntry(user._id, 'APPROVED', `Approved by ${user.name}`);
+      claim.status = 'approved';
+      claim.supervisorApproval = {
+        status: 'approved',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        notes: notes || ''
+      };
     } else if (action === 'reject') {
       claim.status = 'rejected';
-      claim.notes.rejectionReason = notes || 'Rejected by supervisor';
-      await claim.addTimelineEntry(user._id, 'REJECTED', `Rejected by ${user.name}: ${notes}`);
+      claim.supervisorApproval = {
+        status: 'rejected',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        reason: notes || 'Rejected by supervisor',
+        notes: notes || ''
+      };
     }
 
     await claim.save();
@@ -259,7 +243,7 @@ const approveClaim = async (req, res) => {
     console.log('✅ Claim updated successfully:', {
       claimId: claim._id,
       newStatus: claim.status,
-      approvals: claim.approvals
+      supervisorApproval: claim.supervisorApproval
     });
 
     // Create audit log
@@ -295,19 +279,28 @@ const financeApprove = async (req, res) => {
       return res.status(403).json({ error: 'Only finance managers can approve claims' });
     }
 
-    if (!claim.isReadyForFinance()) {
+    // Check if claim is ready for finance approval
+    if (claim.status !== 'approved') {
       return res.status(400).json({ error: 'Claim not ready for finance approval' });
     }
 
     if (action === 'approve') {
       claim.status = 'finance_approved';
-      claim.approvals.financeManagerAt = new Date();
-      claim.notes.financeManager = notes || '';
-      await claim.addTimelineEntry(user._id, 'FINANCE_APPROVED', `Approved by finance manager: ${user.name}`);
+      claim.financeApproval = {
+        status: 'approved',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        notes: notes || ''
+      };
     } else if (action === 'reject') {
       claim.status = 'rejected';
-      claim.notes.rejectionReason = notes || 'Rejected by finance manager';
-      await claim.addTimelineEntry(user._id, 'FINANCE_REJECTED', `Rejected by finance manager: ${user.name}`);
+      claim.financeApproval = {
+        status: 'rejected',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        reason: notes || 'Rejected by finance manager',
+        notes: notes || ''
+      };
     }
 
     await claim.save();
@@ -315,7 +308,7 @@ const financeApprove = async (req, res) => {
     console.log('✅ Finance claim updated successfully:', {
       claimId: claim._id,
       newStatus: claim.status,
-      approvals: claim.approvals
+      financeApproval: claim.financeApproval
     });
 
     // Create audit log
@@ -361,15 +354,14 @@ const markAsPaid = async (req, res) => {
       return res.status(400).json({ error: 'Invalid payout channel' });
     }
 
-    claim.paid = {
-      isPaid: true,
+    claim.payment = {
       paidBy: user._id,
       paidAt: new Date(),
-      channel
+      channel: channel || 'manual'
     };
     claim.status = 'paid';
 
-    await claim.addTimelineEntry(user._id, 'PAID', `Marked as paid via ${channel} by ${user.name}`);
+    // await claim.addTimelineEntry(user._id, 'PAID', `Marked as paid via ${channel} by ${user.name}`);
     await claim.save();
 
     // Create audit log
@@ -428,7 +420,7 @@ const uploadAttachment = async (req, res) => {
     claim.attachments.push(attachment);
     await claim.save();
 
-    await claim.addTimelineEntry(req.user._id, 'ATTACHMENT_ADDED', `Added attachment: ${file.originalname}`);
+    // await claim.addTimelineEntry(req.user._id, 'ATTACHMENT_ADDED', `Added attachment: ${file.originalname}`);
 
     res.json(attachment);
   } catch (error) {

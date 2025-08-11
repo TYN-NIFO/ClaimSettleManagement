@@ -1,11 +1,12 @@
 'use client';
 
 import { format } from 'date-fns';
-import { CheckCircle, XCircle, Clock, AlertCircle, Eye, Edit, ThumbsUp, DollarSign } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, AlertCircle, Eye, Edit, ThumbsUp, DollarSign, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import PaymentModal from './PaymentModal';
 import FinanceApprovalModal from './FinanceApprovalModal';
-import { useMarkPaidMutation, useFinanceApproveMutation } from '@/lib/api';
+import { useMarkPaidMutation, useFinanceApproveMutation, useDeleteClaimMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
@@ -81,8 +82,10 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
   const { user } = useSelector((state: RootState) => state.auth);
   const [payingClaim, setPayingClaim] = useState<Claim | null>(null);
   const [financeApproveClaim, setFinanceApproveClaim] = useState<Claim | null>(null);
+  const [deletingClaim, setDeletingClaim] = useState<string | null>(null);
   const [markPaid] = useMarkPaidMutation();
   const [financeApprove] = useFinanceApproveMutation();
+  const [deleteClaim] = useDeleteClaimMutation();
 
   const handleViewClaim = (claimId: string) => {
     router.push(`/claims/${claimId}`);
@@ -122,13 +125,17 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
 
   const canApproveClaim = (claim: Claim): boolean => {
     if (!user) return false;
-    // Supervisors approve submitted; Finance managers approve supervisor-approved
+    
+    // Supervisors can approve claims that are submitted (but not their own)
     if (user.role === 'supervisor') {
-      return claim.status === 'submitted';
+      return claim.status === 'submitted' && claim.employeeId._id !== user._id;
     }
+    
+    // Finance managers can approve claims that are supervisor approved (but not their own)
     if (user.role === 'finance_manager') {
-      return claim.status === 'approved';
+      return claim.status === 'approved' && claim.employeeId._id !== user._id;
     }
+    
     return false;
   };
 
@@ -139,11 +146,13 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
       case 'rejected':
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'submitted':
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      case 'approved':
       case 's1_approved':
       case 's2_approved':
       case 'both_approved':
       case 'finance_approved':
-        return <Clock className="h-5 w-5 text-yellow-500" />;
+        return <CheckCircle className="h-5 w-5 text-blue-500" />;
       default:
         return <AlertCircle className="h-5 w-5 text-gray-500" />;
     }
@@ -161,8 +170,14 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
         return 'Paid';
       case 'rejected':
         return 'Rejected';
+      case 's1_approved':
+        return 'Supervisor 1 Approved';
+      case 's2_approved':
+        return 'Supervisor 2 Approved';
+      case 'both_approved':
+        return 'Both Supervisors Approved';
       default:
-        return status;
+        return status.replace('_', ' ').toUpperCase();
     }
   };
 
@@ -173,9 +188,13 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
       case 'rejected':
         return 'bg-red-100 text-red-800';
       case 'submitted':
-      case 'approved':
-      case 'finance_approved':
         return 'bg-yellow-100 text-yellow-800';
+      case 'approved':
+      case 's1_approved':
+      case 's2_approved':
+      case 'both_approved':
+      case 'finance_approved':
+        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -201,6 +220,33 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
     return user.role === 'finance_manager' && claim.status === 'finance_approved';
   };
 
+  const canDeleteClaim = (claim: Claim): boolean => {
+    if (!user) return false;
+
+    // Admin can delete any claim
+    if (user.role === 'admin') return true;
+
+    // Employee can delete own claims if not approved
+    if (user.role === 'employee') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Supervisor can only delete their own claims (not claims from assigned employees)
+    if (user.role === 'supervisor') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    // Finance manager can only delete their own claims (not claims from other employees)
+    if (user.role === 'finance_manager') {
+      return claim.employeeId._id === user._id && 
+             ['submitted', 'rejected'].includes(claim.status);
+    }
+
+    return false;
+  };
+
   const handleMarkAsPaid = async (claimId: string, channel?: string) => {
     try {
       await markPaid({ id: claimId, channel: channel || 'manual' }).unwrap();
@@ -221,6 +267,23 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
       setFinanceApproveClaim(null);
     } catch (e) {
       // swallow
+    }
+  };
+
+  const handleDeleteClaim = async (claimId: string) => {
+    if (!confirm('Are you sure you want to delete this claim? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingClaim(claimId);
+      const result = await deleteClaim(claimId).unwrap();
+      toast.success(result.message || 'Claim deleted successfully');
+    } catch (error: any) {
+      const errorMessage = error?.data?.error || error?.message || 'Failed to delete claim';
+      toast.error(errorMessage);
+    } finally {
+      setDeletingClaim(null);
     }
   };
 
@@ -349,9 +412,9 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
                         <ThumbsUp className="h-5 w-5" />
                       </button>
                     )}
-                    {user?.role === 'finance_manager' && canApproveClaim(claim) && (
+                    {user?.role === 'finance_manager' && canApproveClaim(claim) && onApprovalClick && (
                       <button
-                        onClick={() => setFinanceApproveClaim(claim)}
+                        onClick={() => onApprovalClick(claim)}
                         className="text-green-600 hover:text-green-900"
                         title="Finance Approve/Reject"
                       >
@@ -365,6 +428,20 @@ export default function ClaimList({ claims, onApprovalClick, showApprovalButtons
                         title="Mark as Paid"
                       >
                         <DollarSign className="h-5 w-5" />
+                      </button>
+                    )}
+                    {canDeleteClaim(claim) && (
+                      <button
+                        onClick={() => handleDeleteClaim(claim._id)}
+                        disabled={deletingClaim === claim._id}
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                        title="Delete Claim"
+                      >
+                        {deletingClaim === claim._id ? (
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                        ) : (
+                          <Trash2 className="h-5 w-5" />
+                        )}
                       </button>
                     )}
                   </div>
