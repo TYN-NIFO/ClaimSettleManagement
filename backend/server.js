@@ -19,6 +19,17 @@ import userRoutes from './routes/userRoutes.js';
 // Import middleware
 import { auth } from './middleware/auth.js';
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -69,16 +80,52 @@ const allowedOrigins = (() => {
   if (process.env.NODE_ENV === 'production') {
     const list = [process.env.FRONTEND_URL, process.env.CORS_ORIGIN]
       .filter(Boolean)
-      .flatMap((v) => (v.includes(',') ? v.split(',') : v));
+      .flatMap((v) => (v.includes(',') ? v.split(',') : v))
+      .map((v) => v.trim())
+      .filter(Boolean);
     return list.length ? list : [];
   }
   return [process.env.FRONTEND_URL || 'http://localhost:3000'];
 })();
 
+// Optional: regex-based origins for flexible environments (e.g., Vercel previews)
+const allowedOriginRegexes = (() => {
+  const raw = process.env.CORS_ALLOWED_ORIGINS_REGEX || '';
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((pattern) => {
+      try {
+        return new RegExp(pattern);
+      } catch {
+        console.warn(`Invalid CORS regex pattern ignored: ${pattern}`);
+        return null;
+      }
+    })
+    .filter(Boolean);
+})();
+
+const isOriginAllowed = (origin) => {
+  if (allowedOrigins.includes(origin)) return true;
+  for (const rx of allowedOriginRegexes) {
+    if (rx.test(origin)) return true;
+  }
+  return false;
+};
+
+if (process.env.NODE_ENV !== 'test') {
+  console.log('CORS allowed origins:', allowedOrigins);
+  if (allowedOriginRegexes.length) {
+    console.log('CORS allowed regexes:', allowedOriginRegexes.map((r) => r.toString()));
+  }
+}
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // allow non-browser clients
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (isOriginAllowed(origin)) return callback(null, true);
+    console.warn(`CORS blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -89,7 +136,8 @@ app.use(cors({
 app.options('*', cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (isOriginAllowed(origin)) return callback(null, true);
+    console.warn(`CORS (preflight) blocked origin: ${origin}`);
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,

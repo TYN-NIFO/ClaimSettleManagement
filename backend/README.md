@@ -1,96 +1,236 @@
-# Claim Settle Management Backend
+# Claim Management System - Backend API
 
-A Node.js Express server with MongoDB integration for managing insurance claims.
+A robust Node.js/Express backend API for managing insurance claims with role-based access control, file uploads, and comprehensive audit logging.
 
-## Features
+## 🚀 Current Deployment
 
-- RESTful API for claim management
-- MongoDB database integration
-- Pagination and filtering
-- Statistics and analytics
-- Security middleware (helmet, cors, rate limiting)
-- Error handling and validation
+**Live API:** https://claimsettlemanagement.onrender.com/api
 
-## Setup
+**Status:** ✅ Production Ready
 
-1. Install dependencies:
+## 🏗️ Architecture
+
+- **Framework:** Express.js
+- **Database:** MongoDB with Mongoose ODM
+- **Authentication:** JWT with refresh tokens
+- **File Uploads:** Multer with UUID-based naming
+- **Security:** Helmet, CORS, Rate limiting
+- **Monitoring:** Application Insights (Azure)
+- **Deployment:** Render (PaaS)
+
+## 📁 Project Structure
+
+```
+backend/
+├── controllers/          # Route handlers
+├── middleware/          # Custom middleware
+├── models/             # MongoDB schemas
+├── routes/             # API routes
+├── scripts/            # Utility scripts
+├── services/           # Business logic
+├── uploads/            # File uploads
+├── logs/               # Application logs
+├── server.js           # Main application file
+├── package.json        # Dependencies
+└── config.production.env # Production configuration
+```
+
+## 🛠️ Setup & Development
+
+### Prerequisites
+- Node.js 18+
+- MongoDB database
+- Git
+
+### Local Development
 ```bash
+# Clone the repository
+git clone <your-repo-url>
+cd backend
+
+# Install dependencies
 npm install
-```
 
-2. Configure environment variables in `config.env`:
-```
-PORT=5000
-MONGODB_URI=mongodb+srv://lathiesh24:pass1234@cluster0.5rb9nav.mongodb.net/claim-settle-db
-NODE_ENV=development
-```
+# Set up environment variables
+cp config.env.example config.env
+# Edit config.env with your values
 
-3. Start the server:
-```bash
-# Development mode with nodemon
+# Start development server
 npm run dev
-
-# Production mode
-npm start
 ```
 
-## API Endpoints
+### Production Testing
+```bash
+# Test with production configuration
+npm run prod
+
+# Validate production readiness
+npm run validate-prod
+```
+
+## 🔧 Environment Variables
+
+### Required Variables
+- `NODE_ENV` - Environment (development/production)
+- `MONGODB_URI` - MongoDB connection string
+- `JWT_SECRET` - JWT signing secret
+- `JWT_EXPIRES_IN` - JWT expiration time
+- `REFRESH_TOKEN_SECRET` - Refresh token secret
+- `REFRESH_TOKEN_EXPIRES_IN` - Refresh token expiration
+- `FRONTEND_URL` - Frontend application URL
+- `MAX_FILE_SIZE` - Maximum file upload size
+- `UPLOAD_PATH` - File upload directory
+- `RATE_LIMIT_WINDOW_MS` - Rate limiting window
+- `RATE_LIMIT_MAX_REQUESTS` - Rate limiting max requests
+- `APPLICATIONINSIGHTS_CONNECTION_STRING` - Azure monitoring
+
+### Optional Variables
+- `PORT` - Server port (default: 5000)
+- `CORS_ORIGIN` - Additional CORS origins
+- `API_BASE_URL` - API base URL
+- `COOKIE_SECRET` - Cookie encryption secret
+- `SECURE_COOKIES` - Enable secure cookies
+- `LOG_LEVEL` - Logging level
+- `LOG_FILE` - Log file path
+
+## 📡 API Endpoints
+
+### Authentication
+- `POST /api/auth/register` - User registration
+- `POST /api/auth/login` - User login
+- `POST /api/auth/refresh` - Refresh token
+- `POST /api/auth/logout` - User logout
 
 ### Claims
-
-- `GET /api/claims` - Get all claims (with pagination and filtering)
-- `GET /api/claims/stats` - Get claim statistics
-- `GET /api/claims/:id` - Get single claim by ID
+- `GET /api/claims` - Get all claims (filtered by role)
 - `POST /api/claims` - Create new claim
+- `GET /api/claims/:id` - Get specific claim
 - `PUT /api/claims/:id` - Update claim
 - `DELETE /api/claims/:id` - Delete claim
+- `POST /api/claims/:id/approve` - Approve claim
+- `POST /api/claims/:id/reject` - Reject claim
 
-### Query Parameters for GET /api/claims
+### Users
+- `GET /api/users` - Get all users (admin only)
+- `GET /api/users/:id` - Get specific user
+- `PUT /api/users/:id` - Update user
+- `DELETE /api/users/:id` - Delete user
 
-- `page` - Page number (default: 1)
-- `limit` - Items per page (default: 10)
-- `status` - Filter by status (Pending, Under Review, Approved, Rejected, Settled)
-- `claimType` - Filter by claim type (Property, Liability, Health, Auto, Other)
-- `sortBy` - Sort field (default: filedDate)
-- `sortOrder` - Sort order (asc/desc, default: desc)
+### Policies
+- `GET /api/policies` - Get all policies
+- `POST /api/policies` - Create policy (admin only)
+- `PUT /api/policies/:id` - Update policy (admin only)
+- `DELETE /api/policies/:id` - Delete policy (admin only)
 
-### Claim Model
+### Health Check
+- `GET /api/health` - Application health status
 
-```javascript
-{
-  claimNumber: String (required, unique),
-  claimantName: String (required),
-  claimType: String (Property, Liability, Health, Auto, Other),
-  claimAmount: Number (required, min: 0),
-  status: String (Pending, Under Review, Approved, Rejected, Settled),
-  description: String (required),
-  incidentDate: Date (required),
-  filedDate: Date (auto-generated),
-  settlementAmount: Number (default: 0),
-  settlementDate: Date,
-  notes: String,
-  documents: Array
-}
+## 🔐 Role-Based Access Control
+
+### User Roles
+1. **Employee** - Submit and view own claims
+2. **Supervisor** - Approve/reject claims, view team claims
+3. **Finance Manager** - Final approval, payment processing
+4. **Admin** - Full system access, user management
+
+### Permission Matrix
+| Action | Employee | Supervisor | Finance | Admin |
+|--------|----------|------------|---------|-------|
+| Submit Claim | ✅ | ✅ | ✅ | ✅ |
+| View Own Claims | ✅ | ✅ | ✅ | ✅ |
+| View Team Claims | ❌ | ✅ | ✅ | ✅ |
+| View All Claims | ❌ | ❌ | ✅ | ✅ |
+| Approve Claims | ❌ | ✅ | ✅ | ✅ |
+| Process Payments | ❌ | ❌ | ✅ | ✅ |
+| Manage Users | ❌ | ❌ | ❌ | ✅ |
+| Manage Policies | ❌ | ❌ | ❌ | ✅ |
+
+## 🚀 Deployment
+
+### Current Deployment (Render)
+The application is currently deployed on Render:
+
+1. **Automatic Deployments:** Push to Git repository
+2. **Environment Variables:** Configured in Render dashboard
+3. **Monitoring:** Built-in logs and metrics
+4. **Scaling:** Automatic scaling based on traffic
+
+### Alternative Deployment Options
+
+#### Azure App Service
+```bash
+# Install Azure CLI
+npm install -g azure-cli
+
+# Deploy
+az webapp up --name your-app-name --resource-group your-group
 ```
 
-## Health Check
+#### Heroku
+```bash
+# Install Heroku CLI
+heroku create your-app-name
+git push heroku main
+```
 
-- `GET /health` - Check server and database status
+#### Railway
+```bash
+# Install Railway CLI
+npm install -g @railway/cli
 
-## Security Features
+# Deploy
+railway login
+railway up
+```
 
-- Helmet.js for security headers
-- CORS enabled
-- Rate limiting (100 requests per 15 minutes per IP)
-- Input validation and sanitization
-- Error handling middleware
+## 🛡️ Security Features
 
-## Database
+- **JWT Authentication** with refresh tokens
+- **Role-based access control** (RBAC)
+- **Rate limiting** to prevent abuse
+- **CORS protection** with configurable origins
+- **Helmet.js** for security headers
+- **Input validation** with express-validator
+- **File upload security** with size and type restrictions
+- **Audit logging** for all critical actions
 
-The application connects to MongoDB Atlas using the provided connection string. The database name is `claim-settle-db`.
+## 📊 Monitoring & Logging
 
-## Development
+- **Health Check Endpoint:** `/api/health`
+- **Application Insights:** Azure monitoring integration
+- **Structured Logging:** Morgan HTTP logging
+- **Error Handling:** Comprehensive error middleware
+- **Database Monitoring:** Connection status tracking
 
-The server runs on port 5000 by default. You can change this in the `config.env` file.
+## 🔧 Utility Scripts
 
-For development, the server uses nodemon for automatic restarting when files change.
+- `npm run seed` - Seed initial data
+- `npm run create-admin` - Create admin user
+- `npm run create-finance-manager` - Create finance manager
+- `npm run assign-supervisors` - Assign supervisors to employees
+- `npm run check-claims` - Check claim status
+- `npm run validate-prod` - Validate production readiness
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🆘 Support
+
+For issues and questions:
+1. Check the health endpoint: `GET /api/health`
+2. Review application logs
+3. Verify environment variables
+4. Check database connectivity
+
+---
+
+**Status:** ✅ Production Ready | **Last Updated:** $(date)

@@ -100,8 +100,7 @@ function checkFileStructure() {
   const requiredFiles = [
     'server.js',
     'package.json',
-    'config.production.env',
-    'Dockerfile'
+    'config.production.env'
   ];
   
   const requiredDirs = [
@@ -138,39 +137,37 @@ function checkFileStructure() {
   return isValid;
 }
 
-function generateAzureDeploymentGuide() {
-  console.log('\n🚀 Azure Deployment Guide:\n');
+function generateDeploymentGuide() {
+  console.log('\n🚀 Deployment Guide:\n');
   
-  console.log('1. Build Docker Image:');
-  console.log('   docker build -t claim-app-backend .');
+  console.log('✅ Current Status: Backend is deployed on Render');
+  console.log('🌐 URL: https://claimsettlemanagement.onrender.com/api');
   console.log('');
   
-  console.log('2. Test Locally:');
-  console.log('   docker run -p 5000:5000 --env-file config.production.env claim-app-backend');
+  console.log('📝 To update deployment:');
+  console.log('1. Push changes to your Git repository');
+  console.log('2. Render automatically redeploys');
+  console.log('3. No additional setup needed');
   console.log('');
   
-  console.log('3. Deploy to Azure Container Instances:');
-  console.log('   az container create \\');
-  console.log('     --resource-group your-resource-group \\');
-  console.log('     --name claim-app-backend \\');
-  console.log('     --image claim-app-backend \\');
-  console.log('     --ports 5000 \\');
-  console.log('     --environment-variables \\');
-  console.log('       NODE_ENV=production \\');
-  console.log('       MONGODB_URI="your-mongodb-uri" \\');
-  console.log('       JWT_SECRET="your-jwt-secret"');
+  console.log('🔧 Alternative deployment options:');
+  console.log('');
+  console.log('Azure App Service:');
+  console.log('   az webapp up --name your-app-name --resource-group your-group');
   console.log('');
   
-  console.log('4. Or deploy to Azure App Service:');
-  console.log('   - Create an App Service with Node.js runtime');
-  console.log('   - Configure environment variables in Application Settings');
-  console.log('   - Deploy using Azure CLI or GitHub Actions');
+  console.log('Heroku:');
+  console.log('   heroku create && git push heroku main');
   console.log('');
   
-  console.log('5. Configure Application Insights:');
-  console.log('   - Create Application Insights resource in Azure');
-  console.log('   - Update APPLICATIONINSIGHTS_CONNECTION_STRING');
-  console.log('   - Monitor application performance and errors');
+  console.log('Railway:');
+  console.log('   railway login && railway up');
+  console.log('');
+  
+  console.log('📊 Monitor your application:');
+  console.log('   - Health check: GET /api/health');
+  console.log('   - Application logs in Render dashboard');
+  console.log('   - Database connectivity status');
   console.log('');
 }
 
@@ -183,7 +180,7 @@ function main() {
   
   if (envValid && structureValid) {
     console.log('\n🎉 All validations passed! Your application is ready for production deployment.');
-    generateAzureDeploymentGuide();
+    generateDeploymentGuide();
   } else {
     console.log('\n❌ Please fix the issues above before deploying to production.');
     process.exit(1);
