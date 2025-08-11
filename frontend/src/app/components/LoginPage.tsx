@@ -51,7 +51,7 @@ const LoginPage = () => {
       setErrors({});
       dispatch(clearError());
     }
-  }, [formData, dispatch]);
+  }, [formData, dispatch, errors]);
 
   // Check email availability
   const handleEmailBlur = async () => {

@@ -178,7 +178,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Approved Claims</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.statusStats?.find(s => s._id === 'approved')?.count || 0}
+                      {stats.statusStats?.find((s: any) => s._id === 'approved')?.count || 0}
                     </p>
                   </div>
                 </div>
@@ -191,7 +191,7 @@ export default function SupervisorDashboard() {
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Pending Review</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.statusStats?.find(s => s._id === 'submitted')?.count || 0}
+                      {stats.statusStats?.find((s: any) => s._id === 'submitted')?.count || 0}
                     </p>
                   </div>
                 </div>
