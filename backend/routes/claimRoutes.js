@@ -759,18 +759,11 @@ const canAccessFile = async (req, res, next) => {
       }
     }
 
-    // Finance manager can access files from claims that need finance approval or are already approved
+    // Finance manager can access files from all claims for complete oversight
     if (user.role === 'finance_manager') {
-      const allowedStatuses = ['approved', 'finance_approved', 'paid'];
-      if (allowedStatuses.includes(claim.status)) {
-        req.claim = claim;
-        return next();
-      }
-      // Also allow finance managers to access files from their own claims regardless of status
-      if (claim.employeeId.toString() === user._id.toString()) {
-        req.claim = claim;
-        return next();
-      }
+      // Finance managers should have access to all claim files for complete oversight
+      req.claim = claim;
+      return next();
     }
 
     return res.status(403).json({ error: 'Access denied to this file' });

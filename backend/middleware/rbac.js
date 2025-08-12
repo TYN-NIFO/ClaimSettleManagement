@@ -60,19 +60,11 @@ const canAccessClaim = async (req, res, next) => {
       }
     }
 
-    // Finance manager can access claims that need finance approval or are already approved
+    // Finance manager can access all claims for complete oversight
     if (user.role === 'finance_manager') {
-      // Allow access to claims that need finance approval or are already approved/paid
-      const allowedStatuses = ['approved', 'finance_approved', 'paid'];
-      if (allowedStatuses.includes(claim.status)) {
-        req.claim = claim;
-        return next();
-      }
-      // Also allow finance managers to access their own claims regardless of status
-      if (claim.employeeId.toString() === user._id.toString()) {
-        req.claim = claim;
-        return next();
-      }
+      // Finance managers should have access to all claims for complete oversight
+      req.claim = claim;
+      return next();
     }
 
     return res.status(403).json({ error: 'Access denied to this claim' });
