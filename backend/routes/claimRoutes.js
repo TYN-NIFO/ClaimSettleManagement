@@ -716,11 +716,75 @@ router.get('/debug-policy', auth, async (req, res) => {
   }
 });
 
+// Middleware to check file access permissions
+const canAccessFile = async (req, res, next) => {
+  const { storageKey } = req.params;
+  const user = req.user;
+
+  try {
+    // Find the claim that contains this file
+    const claim = await Claim.findOne({
+      'lineItems.attachments.storageKey': storageKey
+    });
+
+    if (!claim) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Admin can access all files
+    if (user.role === 'admin') {
+      req.claim = claim;
+      return next();
+    }
+
+    // Employee can only access files from their own claims
+    if (user.role === 'employee' && claim.employeeId.toString() === user._id.toString()) {
+      req.claim = claim;
+      return next();
+    }
+
+    // Supervisor can access files from claims of assigned employees
+    if (user.role === 'supervisor') {
+      const assignedEmployees = await User.find({
+        $or: [
+          { assignedSupervisor1: user._id },
+          { assignedSupervisor2: user._id }
+        ]
+      }).select('_id');
+      
+      const employeeIds = assignedEmployees.map(emp => emp._id.toString());
+      if (employeeIds.includes(claim.employeeId.toString())) {
+        req.claim = claim;
+        return next();
+      }
+    }
+
+    // Finance manager can access files from claims that need finance approval or are already approved
+    if (user.role === 'finance_manager') {
+      const allowedStatuses = ['approved', 'finance_approved', 'paid'];
+      if (allowedStatuses.includes(claim.status)) {
+        req.claim = claim;
+        return next();
+      }
+      // Also allow finance managers to access files from their own claims regardless of status
+      if (claim.employeeId.toString() === user._id.toString()) {
+        req.claim = claim;
+        return next();
+      }
+    }
+
+    return res.status(403).json({ error: 'Access denied to this file' });
+  } catch (error) {
+    console.error('Error in canAccessFile:', error);
+    res.status(500).json({ error: 'Error checking file access' });
+  }
+};
+
 /**
  * GET /api/claims/files/:storageKey
- * Serve uploaded files
+ * Serve uploaded files with proper access control
  */
-router.get('/files/:storageKey', auth, async (req, res) => {
+router.get('/files/:storageKey', auth, canAccessFile, async (req, res) => {
   try {
     const { storageKey } = req.params;
     
