@@ -17,9 +17,11 @@
     "update-supervisor-level": "node scripts/update-supervisor-level.js",
     "create-finance-manager": "node scripts/create-finance-manager.js",
     "validate-prod": "node scripts/deploy-production.js",
-    "reset-policy": "node scripts/reset-policy.js"
+    "reset-policy": "node scripts/reset-policy.js",
+    "setup-azure": "node scripts/setup-azure-storage.js"
   },
   "dependencies": {
+    "@azure/storage-blob": "^12.17.0",
     "applicationinsights": "^2.9.2",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.6",

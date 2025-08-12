@@ -3,16 +3,49 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Storage service interface
+ * Storage service interface with Azure Blob Storage support
  */
 export class StorageService {
   constructor() {
     this.uploadDir = path.join(process.cwd(), 'uploads');
-    this.ensureUploadDir();
+    this.useCloudStorage = process.env.NODE_ENV === 'production' && process.env.AZURE_STORAGE_CONNECTION_STRING;
+    
+    if (this.useCloudStorage) {
+      this.initializeAzureBlob();
+    } else {
+      this.ensureUploadDir();
+    }
   }
 
   /**
-   * Ensure upload directory exists
+   * Initialize Azure Blob Storage client
+   */
+  async initializeAzureBlob() {
+    try {
+      const { BlobServiceClient } = await import('@azure/storage-blob');
+      
+      this.blobServiceClient = BlobServiceClient.fromConnectionString(
+        process.env.AZURE_STORAGE_CONNECTION_STRING
+      );
+      
+      this.containerName = process.env.AZURE_STORAGE_CONTAINER || 'claim-files';
+      this.containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+      
+      // Ensure container exists
+      await this.containerClient.createIfNotExists({
+        access: 'private'
+      });
+      
+      console.log('Azure Blob Storage initialized for container:', this.containerName);
+    } catch (error) {
+      console.error('Failed to initialize Azure Blob Storage, falling back to local storage:', error);
+      this.useCloudStorage = false;
+      this.ensureUploadDir();
+    }
+  }
+
+  /**
+   * Ensure upload directory exists (for local storage)
    */
   ensureUploadDir() {
     try {
@@ -39,37 +72,75 @@ export class StorageService {
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
-        bufferLength: file.buffer ? file.buffer.length : 0
+        bufferLength: file.buffer ? file.buffer.length : 0,
+        useCloudStorage: this.useCloudStorage
       });
 
       const fileId = uuidv4();
       const extension = path.extname(file.originalname);
       const storageKey = `${fileId}${extension}`;
-      const filePath = path.join(this.uploadDir, storageKey);
 
-      console.log('File will be saved to:', filePath);
-
-      return new Promise((resolve, reject) => {
-        fs.writeFile(filePath, file.buffer, (err) => {
-          if (err) {
-            console.error('Error writing file:', err);
-            reject(err);
-          } else {
-            console.log('File saved successfully:', filePath);
-            resolve({
-              storageKey,
-              fileId,
-              name: file.originalname,
-              size: file.size,
-              mime: file.mimetype
-            });
-          }
-        });
-      });
+      if (this.useCloudStorage && this.containerClient) {
+        return await this.saveToAzureBlob(file, storageKey, fileId);
+      } else {
+        return await this.saveToLocal(file, storageKey, fileId);
+      }
     } catch (error) {
       console.error('Storage service save error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Save file to Azure Blob Storage
+   */
+  async saveToAzureBlob(file, storageKey, fileId) {
+    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
+    
+    await blockBlobClient.upload(file.buffer, file.buffer.length, {
+      blobHTTPHeaders: {
+        blobContentType: file.mimetype
+      },
+      metadata: {
+        originalName: file.originalname,
+        fileId: fileId
+      }
+    });
+    
+    console.log('File saved to Azure Blob Storage:', storageKey);
+
+    return {
+      storageKey,
+      fileId,
+      name: file.originalname,
+      size: file.size,
+      mime: file.mimetype
+    };
+  }
+
+  /**
+   * Save file to local storage
+   */
+  async saveToLocal(file, storageKey, fileId) {
+    const filePath = path.join(this.uploadDir, storageKey);
+
+    return new Promise((resolve, reject) => {
+      fs.writeFile(filePath, file.buffer, (err) => {
+        if (err) {
+          console.error('Error writing file:', err);
+          reject(err);
+        } else {
+          console.log('File saved locally:', filePath);
+          resolve({
+            storageKey,
+            fileId,
+            name: file.originalname,
+            size: file.size,
+            mime: file.mimetype
+          });
+        }
+      });
+    });
   }
 
   /**
@@ -78,6 +149,26 @@ export class StorageService {
    * @returns {Promise<void>}
    */
   async remove(storageKey) {
+    if (this.useCloudStorage && this.containerClient) {
+      return await this.removeFromAzureBlob(storageKey);
+    } else {
+      return await this.removeFromLocal(storageKey);
+    }
+  }
+
+  /**
+   * Remove file from Azure Blob Storage
+   */
+  async removeFromAzureBlob(storageKey) {
+    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
+    await blockBlobClient.delete();
+    console.log('File removed from Azure Blob Storage:', storageKey);
+  }
+
+  /**
+   * Remove file from local storage
+   */
+  async removeFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
     
     return new Promise((resolve, reject) => {
@@ -94,9 +185,29 @@ export class StorageService {
   /**
    * Get file stream for reading
    * @param {string} storageKey - The storage key
-   * @returns {Promise<fs.ReadStream>}
+   * @returns {Promise<fs.ReadStream|ReadableStream>}
    */
   async getStream(storageKey) {
+    if (this.useCloudStorage && this.containerClient) {
+      return await this.getStreamFromAzureBlob(storageKey);
+    } else {
+      return await this.getStreamFromLocal(storageKey);
+    }
+  }
+
+  /**
+   * Get file stream from Azure Blob Storage
+   */
+  async getStreamFromAzureBlob(storageKey) {
+    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
+    const response = await blockBlobClient.download();
+    return response.readableStreamBody;
+  }
+
+  /**
+   * Get file stream from local storage
+   */
+  async getStreamFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
     
     return new Promise((resolve, reject) => {
@@ -116,6 +227,30 @@ export class StorageService {
    * @returns {Promise<{size: number, mime: string}>}
    */
   async getInfo(storageKey) {
+    if (this.useCloudStorage && this.containerClient) {
+      return await this.getInfoFromAzureBlob(storageKey);
+    } else {
+      return await this.getInfoFromLocal(storageKey);
+    }
+  }
+
+  /**
+   * Get file info from Azure Blob Storage
+   */
+  async getInfoFromAzureBlob(storageKey) {
+    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
+    const properties = await blockBlobClient.getProperties();
+    
+    return {
+      size: properties.contentLength,
+      mime: properties.contentType || this.getMimeType(path.extname(storageKey))
+    };
+  }
+
+  /**
+   * Get file info from local storage
+   */
+  async getInfoFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
     
     return new Promise((resolve, reject) => {
