@@ -1,15 +1,17 @@
-import fs from 'fs';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import fs from "fs";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Storage service interface with Azure Blob Storage support
  */
 export class StorageService {
   constructor() {
-    this.uploadDir = path.join(process.cwd(), 'uploads');
-    this.useCloudStorage = process.env.NODE_ENV === 'production' && process.env.AZURE_STORAGE_CONNECTION_STRING;
-    
+    this.uploadDir = path.join(process.cwd(), "uploads");
+    this.useCloudStorage =
+      process.env.NODE_ENV === "production" &&
+      process.env.AZURE_STORAGE_CONNECTION_STRING;
+
     if (this.useCloudStorage) {
       this.initializeAzureBlob();
     } else {
@@ -22,23 +24,31 @@ export class StorageService {
    */
   async initializeAzureBlob() {
     try {
-      const { BlobServiceClient } = await import('@azure/storage-blob');
-      
+      const { BlobServiceClient } = await import("@azure/storage-blob");
+
       this.blobServiceClient = BlobServiceClient.fromConnectionString(
         process.env.AZURE_STORAGE_CONNECTION_STRING
       );
-      
-      this.containerName = process.env.AZURE_STORAGE_CONTAINER || 'claim-files';
-      this.containerClient = this.blobServiceClient.getContainerClient(this.containerName);
-      
+
+      this.containerName = process.env.AZURE_STORAGE_CONTAINER || "claim-files";
+      this.containerClient = this.blobServiceClient.getContainerClient(
+        this.containerName
+      );
+
       // Ensure container exists
       await this.containerClient.createIfNotExists({
-        access: 'private'
+        access: "blob",
       });
-      
-      console.log('Azure Blob Storage initialized for container:', this.containerName);
+
+      console.log(
+        "Azure Blob Storage initialized for container:",
+        this.containerName
+      );
     } catch (error) {
-      console.error('Failed to initialize Azure Blob Storage, falling back to local storage:', error);
+      console.error(
+        "Failed to initialize Azure Blob Storage, falling back to local storage:",
+        error
+      );
       this.useCloudStorage = false;
       this.ensureUploadDir();
     }
@@ -51,12 +61,12 @@ export class StorageService {
     try {
       if (!fs.existsSync(this.uploadDir)) {
         fs.mkdirSync(this.uploadDir, { recursive: true });
-        console.log('Upload directory created:', this.uploadDir);
+        console.log("Upload directory created:", this.uploadDir);
       } else {
-        console.log('Upload directory exists:', this.uploadDir);
+        console.log("Upload directory exists:", this.uploadDir);
       }
     } catch (error) {
-      console.error('Error creating upload directory:', error);
+      console.error("Error creating upload directory:", error);
       throw error;
     }
   }
@@ -68,12 +78,12 @@ export class StorageService {
    */
   async save(file) {
     try {
-      console.log('Storage service saving file:', {
+      console.log("Storage service saving file:", {
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         bufferLength: file.buffer ? file.buffer.length : 0,
-        useCloudStorage: this.useCloudStorage
+        useCloudStorage: this.useCloudStorage,
       });
 
       const fileId = uuidv4();
@@ -86,7 +96,7 @@ export class StorageService {
         return await this.saveToLocal(file, storageKey, fileId);
       }
     } catch (error) {
-      console.error('Storage service save error:', error);
+      console.error("Storage service save error:", error);
       throw error;
     }
   }
@@ -96,25 +106,25 @@ export class StorageService {
    */
   async saveToAzureBlob(file, storageKey, fileId) {
     const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
-    
+
     await blockBlobClient.upload(file.buffer, file.buffer.length, {
       blobHTTPHeaders: {
-        blobContentType: file.mimetype
+        blobContentType: file.mimetype,
       },
       metadata: {
         originalName: file.originalname,
-        fileId: fileId
-      }
+        fileId: fileId,
+      },
     });
-    
-    console.log('File saved to Azure Blob Storage:', storageKey);
+
+    console.log("File saved to Azure Blob Storage:", storageKey);
 
     return {
       storageKey,
       fileId,
       name: file.originalname,
       size: file.size,
-      mime: file.mimetype
+      mime: file.mimetype,
     };
   }
 
@@ -127,16 +137,16 @@ export class StorageService {
     return new Promise((resolve, reject) => {
       fs.writeFile(filePath, file.buffer, (err) => {
         if (err) {
-          console.error('Error writing file:', err);
+          console.error("Error writing file:", err);
           reject(err);
         } else {
-          console.log('File saved locally:', filePath);
+          console.log("File saved locally:", filePath);
           resolve({
             storageKey,
             fileId,
             name: file.originalname,
             size: file.size,
-            mime: file.mimetype
+            mime: file.mimetype,
           });
         }
       });
@@ -162,7 +172,7 @@ export class StorageService {
   async removeFromAzureBlob(storageKey) {
     const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
     await blockBlobClient.delete();
-    console.log('File removed from Azure Blob Storage:', storageKey);
+    console.log("File removed from Azure Blob Storage:", storageKey);
   }
 
   /**
@@ -170,10 +180,10 @@ export class StorageService {
    */
   async removeFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
-    
+
     return new Promise((resolve, reject) => {
       fs.unlink(filePath, (err) => {
-        if (err && err.code !== 'ENOENT') {
+        if (err && err.code !== "ENOENT") {
           reject(err);
         } else {
           resolve();
@@ -209,11 +219,11 @@ export class StorageService {
    */
   async getStreamFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
-    
+
     return new Promise((resolve, reject) => {
       fs.access(filePath, fs.constants.F_OK, (err) => {
         if (err) {
-          reject(new Error('File not found'));
+          reject(new Error("File not found"));
         } else {
           resolve(fs.createReadStream(filePath));
         }
@@ -240,10 +250,11 @@ export class StorageService {
   async getInfoFromAzureBlob(storageKey) {
     const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
     const properties = await blockBlobClient.getProperties();
-    
+
     return {
       size: properties.contentLength,
-      mime: properties.contentType || this.getMimeType(path.extname(storageKey))
+      mime:
+        properties.contentType || this.getMimeType(path.extname(storageKey)),
     };
   }
 
@@ -252,7 +263,7 @@ export class StorageService {
    */
   async getInfoFromLocal(storageKey) {
     const filePath = path.join(this.uploadDir, storageKey);
-    
+
     return new Promise((resolve, reject) => {
       fs.stat(filePath, (err, stats) => {
         if (err) {
@@ -260,7 +271,7 @@ export class StorageService {
         } else {
           resolve({
             size: stats.size,
-            mime: this.getMimeType(path.extname(storageKey))
+            mime: this.getMimeType(path.extname(storageKey)),
           });
         }
       });
@@ -274,19 +285,21 @@ export class StorageService {
    */
   getMimeType(extension) {
     const mimeTypes = {
-      '.pdf': 'application/pdf',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.png': 'image/png',
-      '.gif': 'image/gif',
-      '.doc': 'application/msword',
-      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      '.xls': 'application/vnd.ms-excel',
-      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      '.txt': 'text/plain'
+      ".pdf": "application/pdf",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".gif": "image/gif",
+      ".doc": "application/msword",
+      ".docx":
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ".xls": "application/vnd.ms-excel",
+      ".xlsx":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ".txt": "text/plain",
     };
-    
-    return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';
+
+    return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
   }
 }
 

@@ -420,10 +420,10 @@ const checkUsername = async (req, res) => {
   try {
     const { email } = req.body;
     
-    if (!email) {
+    if (!email || typeof email !== 'string') {
       return res.status(400).json({ 
         error: 'Validation failed',
-        details: 'Email is required' 
+        details: 'Valid email is required' 
       });
     }
 
