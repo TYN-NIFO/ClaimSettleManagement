@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { ArrowLeft, Edit, DollarSign, Trash2 } from 'lucide-react';
 import PaymentModal from '@/app/components/PaymentModal';
 import toast from 'react-hot-toast';
+import authService from '@/lib/authService';
 
 export default function ClaimViewPage() {
   const params = useParams();
@@ -22,6 +23,99 @@ export default function ClaimViewPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [markPaid, { isLoading: isMarkingPaid }] = useMarkPaidMutation();
   const [deleteClaim] = useDeleteClaimMutation();
+
+  // Helper function to handle authenticated file access with token refresh
+  const handleAuthenticatedFileAccess = async (storageKey: string, fileName: string, isDownload: boolean = false) => {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    
+    try {
+      // Get current token
+      let token = accessToken || authService.getAccessToken();
+      
+      // Check if token is expired and refresh if needed
+      if (token && authService.isTokenExpired(token)) {
+        console.log('Token expired, attempting refresh...');
+        token = await authService.refreshToken();
+        if (!token) {
+          toast.error('Authentication expired. Please log in again.');
+          router.push('/login');
+          return;
+        }
+      }
+
+      if (!token) {
+        toast.error('Authentication required. Please log in.');
+        router.push('/login');
+        return;
+      }
+
+      // Make authenticated request
+      const response = await fetch(`${apiBaseUrl}/claims/files/${storageKey}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        
+        if (isDownload) {
+          // Download file
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          // View file
+          window.open(url, '_blank');
+          setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        }
+      } else if (response.status === 401) {
+        // Try one more time with token refresh
+        console.log('First attempt failed, trying with fresh token...');
+        const freshToken = await authService.refreshToken();
+        if (freshToken) {
+          const retryResponse = await fetch(`${apiBaseUrl}/claims/files/${storageKey}`, {
+            headers: {
+              'Authorization': `Bearer ${freshToken}`
+            }
+          });
+          
+          if (retryResponse.ok) {
+            const blob = await retryResponse.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            if (isDownload) {
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = fileName;
+              document.body.appendChild(a);
+              a.click();
+              window.URL.revokeObjectURL(url);
+              document.body.removeChild(a);
+            } else {
+              window.open(url, '_blank');
+              setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            }
+          } else {
+            throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
+          }
+        } else {
+          toast.error('Authentication failed. Please log in again.');
+          router.push('/login');
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error(`${isDownload ? 'Download' : 'View'} failed:`, error);
+      toast.error(`Failed to ${isDownload ? 'download' : 'view'} file. Please try again.`);
+    }
+  };
 
   const canEditClaim = (claim: any): boolean => {
     if (!user || !claim) return false;
@@ -331,82 +425,13 @@ export default function ClaimViewPage() {
                             </div>
                             <div className="mt-3 flex space-x-2">
                               <button
-                                onClick={() => {
-                                  // For viewing, we'll use a fetch request to get the file and then open it in a new tab
-                                  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-                                  if (accessToken) {
-                                    fetch(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, {
-                                      headers: {
-                                        'Authorization': `Bearer ${accessToken}`
-                                      }
-                                    })
-                                    .then(response => {
-                                      if (response.ok) {
-                                        return response.blob();
-                                      }
-                                      throw new Error('Failed to load file');
-                                    })
-                                    .then(blob => {
-                                      const url = window.URL.createObjectURL(blob);
-                                      window.open(url, '_blank');
-                                      // Clean up the URL after a delay
-                                      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-                                    })
-                                    .catch(error => {
-                                      console.error('View failed:', error);
-                                      // Fallback: try to open without auth
-                                      window.open(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, '_blank');
-                                    });
-                                  } else {
-                                    // Fallback: try to open without auth
-                                    window.open(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, '_blank');
-                                  }
-                                }}
+                                onClick={() => handleAuthenticatedFileAccess(attachment.storageKey, attachment.name)}
                                 className="flex-1 bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 transition-colors"
                               >
                                 View
                               </button>
                               <button
-                                onClick={() => {
-                                  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-                                  const link = document.createElement('a');
-                                  link.href = `${apiBaseUrl}/claims/files/${attachment.storageKey}`;
-                                  link.download = attachment.name;
-                                  
-                                  // For download, we need to handle auth differently since we can't set headers on anchor clicks
-                                  // We'll use a fetch request first to get the file with auth, then trigger download
-                                  if (accessToken) {
-                                    fetch(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, {
-                                      headers: {
-                                        'Authorization': `Bearer ${accessToken}`
-                                      }
-                                    })
-                                    .then(response => {
-                                      if (response.ok) {
-                                        return response.blob();
-                                      }
-                                      throw new Error('Failed to download file');
-                                    })
-                                    .then(blob => {
-                                      const url = window.URL.createObjectURL(blob);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = attachment.name;
-                                      document.body.appendChild(a);
-                                      a.click();
-                                      window.URL.revokeObjectURL(url);
-                                      document.body.removeChild(a);
-                                    })
-                                    .catch(error => {
-                                      console.error('Download failed:', error);
-                                      // Fallback to direct link
-                                      link.click();
-                                    });
-                                  } else {
-                                    // Fallback: try direct link
-                                    link.click();
-                                  }
-                                }}
+                                onClick={() => handleAuthenticatedFileAccess(attachment.storageKey, attachment.name, true)}
                                 className="flex-1 bg-gray-600 text-white text-xs px-3 py-1 rounded hover:bg-gray-700 transition-colors"
                               >
                                 Download
