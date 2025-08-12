@@ -333,8 +333,9 @@ export default function ClaimViewPage() {
                               <button
                                 onClick={() => {
                                   // For viewing, we'll use a fetch request to get the file and then open it in a new tab
+                                  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                                   if (accessToken) {
-                                    fetch(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, {
+                                    fetch(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, {
                                       headers: {
                                         'Authorization': `Bearer ${accessToken}`
                                       }
@@ -354,11 +355,11 @@ export default function ClaimViewPage() {
                                     .catch(error => {
                                       console.error('View failed:', error);
                                       // Fallback: try to open without auth
-                                      window.open(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, '_blank');
+                                      window.open(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, '_blank');
                                     });
                                   } else {
                                     // Fallback: try to open without auth
-                                    window.open(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, '_blank');
+                                    window.open(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, '_blank');
                                   }
                                 }}
                                 className="flex-1 bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 transition-colors"
@@ -367,14 +368,15 @@ export default function ClaimViewPage() {
                               </button>
                               <button
                                 onClick={() => {
+                                  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
                                   const link = document.createElement('a');
-                                  link.href = `http://localhost:5000/api/claims/files/${attachment.storageKey}`;
+                                  link.href = `${apiBaseUrl}/claims/files/${attachment.storageKey}`;
                                   link.download = attachment.name;
                                   
                                   // For download, we need to handle auth differently since we can't set headers on anchor clicks
                                   // We'll use a fetch request first to get the file with auth, then trigger download
                                   if (accessToken) {
-                                    fetch(`http://localhost:5000/api/claims/files/${attachment.storageKey}`, {
+                                    fetch(`${apiBaseUrl}/claims/files/${attachment.storageKey}`, {
                                       headers: {
                                         'Authorization': `Bearer ${accessToken}`
                                       }
