@@ -16,7 +16,6 @@ export default function ClaimEditPage() {
   const { data: claim, isLoading, error } = useGetClaimQuery(claimId);
 
   const handleClose = () => {
-    // Navigate back to appropriate dashboard based on user role
     const dashboardRoutes = {
       employee: '/employee',
       supervisor: '/supervisor', 
