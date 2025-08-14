@@ -45,8 +45,69 @@ const upload = multer({
 });
 
 /**
- * POST /api/claims
- * Create a new claim with line items and file uploads
+ * @swagger
+ * /claims:
+ *   post:
+ *     tags: [Claims]
+ *     summary: Create a new claim
+ *     description: Create a new expense claim with line items and file attachments
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               claimData:
+ *                 type: string
+ *                 description: JSON string containing claim data
+ *                 example: '{"businessUnit":"Alliance","category":"Travel","lineItems":[{"date":"2024-01-15","subCategory":"Meals","description":"Business lunch","amount":1500,"gstTotal":270}]}'
+ *               fileMapping:
+ *                 type: string
+ *                 description: JSON string mapping files to line items
+ *                 example: '{"receipt.pdf":0}'
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: File attachments (PDF, JPG, PNG)
+ *     responses:
+ *       201:
+ *         description: Claim created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim created successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/', auth, upload.array('files', 50), async (req, res) => {
   try {
@@ -163,8 +224,80 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
 });
 
 /**
- * GET /api/claims
- * Get claims based on user role
+ * @swagger
+ * /claims:
+ *   get:
+ *     tags: [Claims]
+ *     summary: Get claims list
+ *     description: Retrieve claims based on user role and filters
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [submitted, approved, rejected, finance_approved, paid]
+ *         description: Filter by claim status
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by claim category
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *     responses:
+ *       200:
+ *         description: Claims retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 claims:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Claim'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     total:
+ *                       type: integer
+ *                       example: 25
+ *                     pages:
+ *                       type: integer
+ *                       example: 3
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/', auth, async (req, res) => {
   try {
@@ -242,8 +375,58 @@ router.get('/', auth, async (req, res) => {
 });
 
 /**
- * GET /api/claims/stats
- * Get claim statistics
+ * @swagger
+ * /claims/stats:
+ *   get:
+ *     tags: [Claims]
+ *     summary: Get claim statistics
+ *     description: Retrieve claim statistics based on user role
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalClaims:
+ *                       type: integer
+ *                       example: 25
+ *                     pendingClaims:
+ *                       type: integer
+ *                       example: 5
+ *                     approvedClaims:
+ *                       type: integer
+ *                       example: 15
+ *                     rejectedClaims:
+ *                       type: integer
+ *                       example: 3
+ *                     totalAmount:
+ *                       type: number
+ *                       example: 125000.50
+ *                     averageAmount:
+ *                       type: number
+ *                       example: 5000.02
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/stats', auth, async (req, res) => {
   try {
@@ -295,8 +478,59 @@ router.get('/stats', auth, async (req, res) => {
 });
 
 /**
- * GET /api/claims/:id
- * Get a specific claim
+ * @swagger
+ * /claims/{id}:
+ *   get:
+ *     tags: [Claims]
+ *     summary: Get a specific claim
+ *     description: Retrieve details of a specific claim by ID
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Claim retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Access denied
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/:id', auth, rbac(['employee', 'supervisor', 'finance_manager', 'admin']), async (req, res) => {
   try {
@@ -318,8 +552,87 @@ router.get('/:id', auth, rbac(['employee', 'supervisor', 'finance_manager', 'adm
 });
 
 /**
- * PATCH /api/claims/:id
- * Update an existing claim with file support
+ * @swagger
+ * /claims/{id}:
+ *   patch:
+ *     tags: [Claims]
+ *     summary: Update an existing claim
+ *     description: Update claim details and add new file attachments
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               claimData:
+ *                 type: string
+ *                 description: JSON string containing updated claim data
+ *               fileMapping:
+ *                 type: string
+ *                 description: JSON string mapping files to line items
+ *               files:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: New file attachments
+ *     responses:
+ *       200:
+ *         description: Claim updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim updated successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Validation error or claim cannot be updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Cannot update this claim
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
   try {
@@ -454,8 +767,89 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
 });
 
 /**
- * POST /api/claims/:id/approve
- * Approve/reject claim by supervisor
+ * @swagger
+ * /claims/{id}/approve:
+ *   post:
+ *     tags: [Claim Approval]
+ *     summary: Approve or reject claim (Supervisor)
+ *     description: Supervisor approval/rejection of a claim
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [approve, reject]
+ *                 description: Approval action
+ *                 example: "approve"
+ *               reason:
+ *                 type: string
+ *                 description: Reason for rejection (required if rejecting)
+ *                 example: "Missing receipts"
+ *               notes:
+ *                 type: string
+ *                 description: Additional notes
+ *                 example: "Approved with conditions"
+ *     responses:
+ *       200:
+ *         description: Claim approval processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim approved successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Invalid action or missing reason for rejection
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Supervisor access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/:id/approve', auth, rbac(['supervisor']), canAccessClaim, async (req, res) => {
   try {
@@ -474,8 +868,89 @@ router.post('/:id/approve', auth, rbac(['supervisor']), canAccessClaim, async (r
 });
 
 /**
- * POST /api/claims/:id/finance-approve
- * Approve/reject claim by finance manager
+ * @swagger
+ * /claims/{id}/finance-approve:
+ *   post:
+ *     tags: [Claim Approval]
+ *     summary: Finance approval of claim
+ *     description: Finance manager approval/rejection of a claim
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [approve, reject]
+ *                 description: Finance approval action
+ *                 example: "approve"
+ *               reason:
+ *                 type: string
+ *                 description: Reason for rejection (required if rejecting)
+ *                 example: "Budget exceeded"
+ *               notes:
+ *                 type: string
+ *                 description: Additional notes
+ *                 example: "Approved for payment"
+ *     responses:
+ *       200:
+ *         description: Finance approval processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim finance approved successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Invalid action or missing reason
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Finance manager access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessClaim, async (req, res) => {
   try {
@@ -494,8 +969,83 @@ router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessCl
 });
 
 /**
- * POST /api/claims/:id/mark-paid
- * Mark claim as paid
+ * @swagger
+ * /claims/{id}/mark-paid:
+ *   post:
+ *     tags: [Claim Payment]
+ *     summary: Mark claim as paid
+ *     description: Mark a finance-approved claim as paid
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               channel:
+ *                 type: string
+ *                 description: Payment channel/method
+ *                 example: "Bank Transfer"
+ *               reference:
+ *                 type: string
+ *                 description: Payment reference number
+ *                 example: "TXN123456789"
+ *     responses:
+ *       200:
+ *         description: Claim marked as paid successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim marked as paid successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Claim not eligible for payment
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Finance manager or admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/:id/mark-paid', auth, rbac(['finance_manager', 'admin']), async (req, res) => {
   try {
@@ -577,8 +1127,66 @@ router.post('/:id/upload', auth, upload.single('file'), async (req, res) => {
 });
 
 /**
- * DELETE /api/claims/:id
- * Delete a claim (with role-based permissions)
+ * @swagger
+ * /claims/{id}:
+ *   delete:
+ *     tags: [Claims]
+ *     summary: Delete a claim
+ *     description: Delete a claim (only allowed for submitted claims by owner or admin)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       200:
+ *         description: Claim deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim deleted successfully"
+ *       400:
+ *         description: Claim cannot be deleted (wrong status)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Cannot delete this claim
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete('/:id', auth, async (req, res) => {
   try {
@@ -774,8 +1382,62 @@ const canAccessFile = async (req, res, next) => {
 };
 
 /**
- * GET /api/claims/files/:storageKey
- * Serve uploaded files with proper access control
+ * @swagger
+ * /claims/files/{storageKey}:
+ *   get:
+ *     tags: [File Management]
+ *     summary: Download claim attachment
+ *     description: Download a file attachment from a claim
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: storageKey
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: File storage key
+ *         example: "507f1f77bcf86cd799439011.pdf"
+ *     responses:
+ *       200:
+ *         description: File downloaded successfully
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           image/jpeg:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *           image/png:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - No access to this file
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: File not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/files/:storageKey', auth, canAccessFile, async (req, res) => {
   try {

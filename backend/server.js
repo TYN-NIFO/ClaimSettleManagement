@@ -16,6 +16,10 @@ import claimRoutes from './routes/claimRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 
+// Import Swagger
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './config/swagger.js';
+
 // Import middleware
 import { auth } from './middleware/auth.js';
 
@@ -170,6 +174,13 @@ if (process.env.NODE_ENV === 'production') {
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Swagger Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: "Claim Management API Documentation"
+}));
 
 // Health check with detailed information
 app.get('/health', (req, res) => {

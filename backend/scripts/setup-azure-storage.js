@@ -17,7 +17,11 @@ const __dirname = path.dirname(__filename);
 
 // Load environment variables
 const envPath = path.join(__dirname, "..", ".env");
+const prodEnvPath = path.join(__dirname, "..", "config.production.env");
+
+// Try to load .env first, then production config as fallback
 dotenv.config({ path: envPath });
+dotenv.config({ path: prodEnvPath });
 
 async function setupAzureStorage() {
   console.log(

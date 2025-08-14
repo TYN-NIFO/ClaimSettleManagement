@@ -36,9 +36,7 @@ export class StorageService {
       );
 
       // Ensure container exists
-      await this.containerClient.createIfNotExists({
-        access: "blob",
-      });
+      await this.containerClient.createIfNotExists();
 
       console.log(
         "Azure Blob Storage initialized for container:",
