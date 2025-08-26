@@ -17,7 +17,7 @@ export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentMo
     setIsSubmitting(true);
     try {
       // Default to a generic channel since UX doesn't ask for one
-      await onMarkAsPaid(claim._id, 'manual');
+      await onMarkAsPaid(claim._id, 'Cash');
       onClose();
     } catch (error) {
       console.error('Payment failed:', error);
