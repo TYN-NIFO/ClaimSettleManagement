@@ -196,15 +196,18 @@ export default function ClaimViewPage() {
       toast.success(result.message || 'Claim deleted successfully');
       
       // Navigate back to appropriate dashboard
-      const dashboardRoutes = {
-        employee: '/employee',
-        supervisor: '/supervisor', 
-        finance_manager: '/finance',
-        admin: '/admin'
-      };
-      
-      const route = dashboardRoutes[user?.role as keyof typeof dashboardRoutes] || '/employee';
-      router.push(route);
+      if (user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') {
+        router.push('/executive');
+      } else {
+        const dashboardRoutes = {
+          employee: '/employee',
+          finance_manager: '/finance',
+          admin: '/admin'
+        };
+        
+        const route = dashboardRoutes[user?.role as keyof typeof dashboardRoutes] || '/employee';
+        router.push(route);
+      }
     } catch (error: any) {
       const errorMessage = error?.data?.error || error?.message || 'Failed to delete claim';
       toast.error(errorMessage);

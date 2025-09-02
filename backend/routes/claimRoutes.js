@@ -9,7 +9,7 @@ import User from '../models/User.js';
 import { validateAgainstPolicy, computeClaimTotals, getCurrentPolicy } from '../services/policyValidation.js';
 import storageService from '../services/storage.js';
 import { createAuditLog } from '../controllers/authController.js';
-import { approveClaim, financeApprove, markAsPaid } from '../controllers/claimController.js';
+import { financeApprove, executiveApprove, markAsPaid } from '../controllers/claimController.js';
 
 const router = express.Router();
 
@@ -313,28 +313,14 @@ router.get('/', auth, async (req, res) => {
     if (status) filter.status = status;
     if (category) filter.category = category;
 
-    // Role-based filtering
-    if (user.role === 'employee') {
+    // Role-based filtering - Check executive role FIRST before other role checks
+    if (user.role === 'executive' || user.role === 'admin') {
+      // Executives and admins see all claims for final approval
+      // No filter applied - they can see everything
+      console.log(`${user.role} - no filter applied`);
+    } else if (user.role === 'employee') {
       filter.employeeId = user._id;
       console.log('Employee filter applied:', filter);
-    } else if (user.role === 'supervisor') {
-      // Supervisors see claims from their assigned employees AND their own claims
-      const assignedEmployees = await User.find({
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      }).select('_id name email');
-      
-      console.log('Assigned employees found:', assignedEmployees);
-      
-      const assignedEmployeeIds = assignedEmployees.map(emp => emp._id);
-      assignedEmployeeIds.push(user._id); // Include their own claims
-      
-      console.log('Employee IDs in filter:', assignedEmployeeIds);
-      
-      filter.employeeId = { $in: assignedEmployeeIds };
-      console.log('Supervisor filter applied:', JSON.stringify(filter, null, 2));
     } else if (user.role === 'finance_manager') {
       // Finance managers see all claims - they need to see their own claims and all claims that need their attention
       // No filter applied - they can see everything
@@ -346,8 +332,8 @@ router.get('/', auth, async (req, res) => {
 
     const claims = await Claim.find(filter)
       .populate('employeeId', 'name email')
-      .populate('supervisorApproval.approvedBy', 'name email')
       .populate('financeApproval.approvedBy', 'name email')
+      .populate('executiveApproval.approvedBy', 'name email')
       .populate('payment.paidBy', 'name email')
       .sort({ createdAt: -1 })
       .limit(limit * 1)
@@ -436,16 +422,7 @@ router.get('/stats', auth, async (req, res) => {
     // Role-based filtering
     if (user.role === 'employee') {
       filter.employeeId = user._id;
-    } else if (user.role === 'supervisor') {
-      const assignedEmployees = await User.find({
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      }).select('_id');
-      const assignedEmployeeIds = assignedEmployees.map(emp => emp._id);
-      assignedEmployeeIds.push(user._id); // Include their own claims
-      filter.employeeId = { $in: assignedEmployeeIds };
+
     }
     // Finance managers and admins can see all claims (no filter applied)
 
@@ -532,12 +509,13 @@ router.get('/stats', auth, async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', auth, rbac(['employee', 'supervisor', 'finance_manager', 'admin']), async (req, res) => {
+router.get('/:id', auth, rbac(['employee', 'finance_manager', 'admin']), async (req, res) => {
   try {
     const claim = await Claim.findById(req.params.id)
       .populate('employeeId', 'name email')
-      .populate('supervisorApproval.approvedBy', 'name email')
+
       .populate('financeApproval.approvedBy', 'name email')
+      .populate('executiveApproval.approvedBy', 'name email')
       .populate('payment.paidBy', 'name email');
 
     if (!claim) {
@@ -659,12 +637,11 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
     // Check permissions - only allow updates if:
     // 1. User is the claim owner and claim is in editable state
     // 2. User is admin
-    // 3. User is supervisor and claim is from assigned employee
+    // 3. User can edit their own claims if status allows
     const canEdit = 
       user.role === 'admin' ||
       (existingClaim.employeeId.toString() === user._id.toString() && 
-       ['submitted', 'rejected'].includes(existingClaim.status)) ||
-      (user.role === 'supervisor' && ['submitted', 'rejected'].includes(existingClaim.status));
+       ['submitted', 'rejected'].includes(existingClaim.status));
 
     if (!canEdit) {
       return res.status(403).json({ 
@@ -730,9 +707,7 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
     if (existingClaim.status === 'rejected') {
       updateData.status = 'submitted';
       // Clear previous approval/rejection data
-      updateData.supervisorApproval = {
-        status: 'pending'
-      };
+
       updateData.financeApproval = {
         status: 'pending'
       };
@@ -749,6 +724,7 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
     ).populate('employeeId', 'name email')
      .populate('supervisorApproval.approvedBy', 'name email')
      .populate('financeApproval.approvedBy', 'name email')
+     .populate('executiveApproval.approvedBy', 'name email')
      .populate('payment.paidBy', 'name email');
 
     // Create audit log
@@ -851,21 +827,7 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/approve', auth, rbac(['supervisor']), canAccessClaim, async (req, res) => {
-  try {
-    // Set the claim in req object for the controller
-    req.claim = req.claim || await Claim.findById(req.params.id);
-    if (!req.claim) {
-      return res.status(404).json({ error: 'Claim not found' });
-    }
-    
-    // Call the controller function
-    await approveClaim(req, res);
-  } catch (error) {
-    console.error('Approve claim error:', error);
-    res.status(500).json({ error: 'Failed to approve claim', details: error?.message || 'Unknown error' });
-  }
-});
+
 
 /**
  * @swagger
@@ -954,8 +916,7 @@ router.post('/:id/approve', auth, rbac(['supervisor']), canAccessClaim, async (r
  */
 router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessClaim, async (req, res) => {
   try {
-    // Set the claim in req object for the controller
-    req.claim = req.claim || await Claim.findById(req.params.id);
+    // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
     if (!req.claim) {
       return res.status(404).json({ error: 'Claim not found' });
     }
@@ -964,6 +925,106 @@ router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessCl
     await financeApprove(req, res);
   } catch (error) {
     console.error('Finance approve claim error:', error);
+    res.status(500).json({ error: 'Failed to approve claim', details: error?.message || 'Unknown error' });
+  }
+});
+
+/**
+ * @swagger
+ * /claims/{id}/executive-approve:
+ *   post:
+ *     tags: [Claim Approval]
+ *     summary: Executive approval of claim
+ *     description: Executive (CEO/CTO) final approval/rejection of a claim
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Claim ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [approve, reject]
+ *                 description: Executive approval action
+ *                 example: "approve"
+ *               reason:
+ *                 type: string
+ *                 description: Reason for rejection (required if rejecting)
+ *                 example: "Budget constraints"
+ *               notes:
+ *                 type: string
+ *                 description: Additional notes
+ *                 example: "Final approval for payment"
+ *     responses:
+ *       200:
+ *         description: Executive approval processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Claim executive approved successfully"
+ *                 claim:
+ *                   $ref: '#/components/schemas/Claim'
+ *       400:
+ *         description: Invalid action or missing reason
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Executive access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Claim not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/:id/executive-approve', auth, canAccessClaim, async (req, res) => {
+  try {
+    // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
+    if (!req.claim) {
+      return res.status(404).json({ error: 'Claim not found' });
+    }
+    
+    // Call the controller function
+    await executiveApprove(req, res);
+  } catch (error) {
+    console.error('Executive approve claim error:', error);
     res.status(500).json({ error: 'Failed to approve claim', details: error?.message || 'Unknown error' });
   }
 });
@@ -1218,18 +1279,7 @@ router.delete('/:id', auth, async (req, res) => {
       } else {
         reason = 'Can only delete own claims';
       }
-    } else if (user.role === 'supervisor') {
-      // Supervisors can only delete their own claims (not claims from assigned employees)
-      if (claim.employeeId.toString() === user._id.toString()) {
-        if (['submitted', 'rejected'].includes(claim.status)) {
-          canDelete = true;
-          reason = 'Supervisor can delete own claim before approval';
-        } else {
-          reason = `Cannot delete claim with status: ${claim.status}`;
-        }
-      } else {
-        reason = 'Can only delete own claims';
-      }
+
     } else if (user.role === 'finance_manager') {
       // Finance managers can only delete their own claims (not claims from other employees)
       if (claim.employeeId.toString() === user._id.toString()) {
@@ -1351,25 +1401,11 @@ const canAccessFile = async (req, res, next) => {
       return next();
     }
 
-    // Supervisor can access files from claims of assigned employees
-    if (user.role === 'supervisor') {
-      const assignedEmployees = await User.find({
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      }).select('_id');
-      
-      const employeeIds = assignedEmployees.map(emp => emp._id.toString());
-      if (employeeIds.includes(claim.employeeId.toString())) {
-        req.claim = claim;
-        return next();
-      }
-    }
 
-    // Finance manager can access files from all claims for complete oversight
-    if (user.role === 'finance_manager') {
-      // Finance managers should have access to all claim files for complete oversight
+
+    // Finance manager and executives can access files from all claims for complete oversight
+    if (user.role === 'finance_manager' || user.role === 'executive') {
+      // Finance managers and executives should have access to all claim files for complete oversight
       req.claim = claim;
       return next();
     }

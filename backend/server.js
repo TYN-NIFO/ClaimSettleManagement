@@ -15,6 +15,7 @@ import authRoutes from './routes/authRoutes.js';
 import claimRoutes from './routes/claimRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import leaveRoutes from './routes/leaveRoutes.js';
 
 // Import Swagger
 import swaggerUi from 'swagger-ui-express';
@@ -210,6 +211,7 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/claims', claimRoutes);
+app.use('/api/leaves', leaveRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/users', userRoutes);
 

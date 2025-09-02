@@ -62,7 +62,7 @@ const ClaimSchema = new mongoose.Schema({
   netPayable: Number,
   status: { 
     type: String, 
-    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'paid'], 
+    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'executive_approved', 'paid'], 
     default: 'submitted' 
   },
   policyVersion: String,
@@ -88,6 +88,13 @@ const ClaimSchema = new mongoose.Schema({
     notes: String
   },
   financeApproval: {
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: Date,
+    status: { type: String, enum: ['approved', 'rejected', 'pending'], default: 'pending' },
+    reason: String,
+    notes: String
+  },
+  executiveApproval: {
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedAt: Date,
     status: { type: String, enum: ['approved', 'rejected', 'pending'], default: 'pending' },

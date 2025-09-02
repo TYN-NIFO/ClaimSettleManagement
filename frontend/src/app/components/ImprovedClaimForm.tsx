@@ -50,9 +50,9 @@ const createClaimSchema = () => {
           subCategory: z.string().min(1, "Sub-category is required"),
           description: z.string().min(1, "Description is required"),
           currency: z.enum(currencies),
-          amount: z.number().positive("Amount must be positive"),
-          gstTotal: z.number().min(0, "GST total must be non-negative"),
-          amountInINR: z.number().positive("Amount in INR is required"),
+          amount: z.union([z.string(), z.number()]).refine((val) => !isNaN(Number(val)), "Amount must be a valid number"),
+          gstTotal: z.union([z.string(), z.number()]).refine((val) => !isNaN(Number(val)), "GST Total must be a valid number"),
+          amountInINR: z.union([z.string(), z.number()]).refine((val) => !isNaN(Number(val)), "Amount in INR must be a valid number"),
           attachments: z
             .array(
               z.object({
@@ -222,9 +222,9 @@ export default function ImprovedClaimForm({
       subCategory: "",
       description: "",
       currency: "INR" as const,
-      amount: 0,
-      gstTotal: 0,
-      amountInINR: 0,
+      amount: "",
+      gstTotal: "",
+      amountInINR: "",
       attachments: [],
     };
 
@@ -955,11 +955,12 @@ function LineItemForm({
             render={({ field }) => (
               <input
                 {...field}
-                type="number"
-                step="0.01"
-                placeholder={`Enter amount in ${watchedCurrency || "INR"}`}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder=""
                 className="input text-lg font-medium"
-                onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                onChange={(e) => field.onChange(e.target.value)}
               />
             )}
           />
@@ -983,11 +984,12 @@ function LineItemForm({
             render={({ field }) => (
               <input
                 {...field}
-                type="number"
-                step="0.01"
-                placeholder={`GST in ${watchedCurrency || "INR"}`}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder=""
                 className="input"
-                onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                onChange={(e) => field.onChange(e.target.value)}
               />
             )}
           />

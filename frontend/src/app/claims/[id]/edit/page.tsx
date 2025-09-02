@@ -18,7 +18,7 @@ export default function ClaimEditPage() {
   const handleClose = () => {
     const dashboardRoutes = {
       employee: '/employee',
-      supervisor: '/supervisor', 
+       
       finance_manager: '/finance',
       admin: '/admin'
     };

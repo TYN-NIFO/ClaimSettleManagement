@@ -4,6 +4,7 @@ import { setTokens, logout } from './slices/authSlice';
 
 class AuthService {
   private refreshPromise: Promise<any> | null = null;
+  private isRefreshing = false;
 
   // Get access token from store
   getAccessToken(): string | null {
@@ -50,19 +51,21 @@ class AuthService {
     }
   }
 
-  // Refresh access token
+  // Refresh access token with race condition protection
   async refreshToken(): Promise<string | null> {
     // Prevent multiple simultaneous refresh requests
-    if (this.refreshPromise) {
+    if (this.isRefreshing) {
       return this.refreshPromise;
     }
 
+    this.isRefreshing = true;
     this.refreshPromise = this.performRefresh();
 
     try {
       const result = await this.refreshPromise;
       return result;
     } finally {
+      this.isRefreshing = false;
       this.refreshPromise = null;
     }
   }

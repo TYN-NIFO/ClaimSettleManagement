@@ -67,6 +67,12 @@ const canAccessClaim = async (req, res, next) => {
       return next();
     }
 
+    // Executives (CEO/CTO) can access all claims for final approval
+    if (user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
+      req.claim = claim;
+      return next();
+    }
+
     return res.status(403).json({ error: 'Access denied to this claim' });
   } catch (error) {
     console.error('Error in canAccessClaim:', error);

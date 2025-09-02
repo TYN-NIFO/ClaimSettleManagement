@@ -19,13 +19,21 @@ import {
   AlertCircle,
   Eye,
   Edit,
-  Trash2
+  Trash2,
+  Calendar
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
+import LeaveMonthlyView from './LeaveMonthlyView';
+
+
+type ViewMode = 'claims' | 'leaves' | 'leave-dashboard';
 
 export default function EmployeeDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
+  const [currentView, setCurrentView] = useState<ViewMode>('claims');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
   const claims = claimsData?.claims || [];
@@ -105,13 +113,17 @@ export default function EmployeeDashboard() {
             </div>
             
             <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowClaimForm(true)}
-                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Claim
-              </button>
+              {currentView === 'claims' && (
+                <button
+                  onClick={() => setShowClaimForm(true)}
+                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Claim
+                </button>
+              )}
+              
+
               
               <button
                 onClick={handleLogout}
@@ -125,6 +137,32 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
+      {/* Navigation Tabs */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="-mb-px flex space-x-8">
+            {[
+              { key: 'claims' as ViewMode, label: 'Claims', icon: FileText },
+              { key: 'leaves' as ViewMode, label: 'Leaves', icon: Calendar },
+              { key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setCurrentView(tab.key)}
+                className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  currentView === tab.key
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon className="h-4 w-4" />
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {showClaimForm ? (
@@ -134,176 +172,237 @@ export default function EmployeeDashboard() {
           />
         ) : (
           <>
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <FileText className="h-6 w-6 text-blue-600" />
+            {currentView === 'claims' && (
+              <>
+                {/* Statistics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <FileText className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Total Claims</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Claims</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <Clock className="h-6 w-6 text-yellow-600" />
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center">
+                      <div className="p-2 bg-yellow-100 rounded-lg">
+                        <Clock className="h-6 w-6 text-yellow-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Pending</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Pending</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.pending}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <CheckCircle className="h-6 w-6 text-green-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Approved</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.approved}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Approved</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.approved}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <AlertCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Rejected</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
+                  <div className="bg-white rounded-lg shadow p-6">
+                    <div className="flex items-center">
+                      <div className="p-2 bg-red-100 rounded-lg">
+                        <AlertCircle className="h-6 w-6 text-red-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-gray-600">Rejected</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.rejected}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Total Amount Card */}
-            <div className="bg-white rounded-lg shadow p-6 mb-8">
-              <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Claimed Amount</p>
-                  <p className="text-3xl font-bold text-green-600">
-                    ₹{stats.totalAmount.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Claims List */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">My Claims</h2>
-                <p className="text-sm text-gray-600">View and manage your expense claims</p>
-              </div>
-              
-              <div className="p-6">
-                {claimsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-2">Loading claims...</span>
+                {/* Total Amount Card */}
+                <div className="bg-white rounded-lg shadow p-6 mb-8">
+                  <div className="flex items-center">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <DollarSign className="h-6 w-6 text-green-600" />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600">Total Claimed Amount</p>
+                      <p className="text-3xl font-bold text-green-600">
+                        ₹{stats.totalAmount.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                ) : claimsError ? (
+                </div>
+
+                {/* Claims List */}
+                <div className="bg-white rounded-lg shadow">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-lg font-medium text-gray-900">My Claims</h2>
+                    <p className="text-sm text-gray-600">View and manage your expense claims</p>
+                  </div>
+                  
+                  <div className="p-6">
+                    {claimsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <span className="ml-2">Loading claims...</span>
+                      </div>
+                    ) : claimsError ? (
+                      <div className="text-center py-8">
+                        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                        <p className="text-red-600">Failed to load claims</p>
+                      </div>
+                    ) : claims && claims.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Claim ID
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Category
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Amount
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {claims.map((claim: any) => (
+                              <tr key={claim._id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {claim._id.slice(-8)}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {claim.category}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  ₹{claim.grandTotal?.toLocaleString() || '0'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
+                                    claim.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                    claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
+                                    claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {claim.status.replace('_', ' ').toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {new Date(claim.createdAt).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => router.push(`/claims/${claim._id}`)}
+                                      className="text-blue-600 hover:text-blue-900"
+                                      title="View Details"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </button>
+                                    {['submitted', 'rejected'].includes(claim.status) && (
+                                      <button
+                                        onClick={() => router.push(`/claims/${claim._id}/edit`)}
+                                        className="text-green-600 hover:text-green-900"
+                                        title="Edit Claim"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">No claims found</p>
+                        <p className="text-sm text-gray-400 mt-1">Create your first claim to get started</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {currentView === 'leaves' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Leaves</h2>
+                  <div className="flex space-x-3">
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1].map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                    
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(0, i).toLocaleDateString('en-US', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <LeaveMonthlyView 
+                  year={selectedYear}
+                  month={selectedMonth}
+                  isCurrentUser={true}
+                />
+              </div>
+            )}
+
+            {currentView === 'leave-dashboard' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-2xl font-bold text-gray-900">Leave Dashboard</h2>
+                </div>
+                <div className="bg-white rounded-lg shadow p-6">
                   <div className="text-center py-8">
-                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <p className="text-red-600">Failed to load claims</p>
+                    <Calendar className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+                    <p className="text-gray-600 mb-2">Leave Dashboard</p>
+                    <p className="text-sm text-gray-400">View comprehensive leave analytics and management</p>
+                    <button
+                      onClick={() => router.push('/leave-dashboard')}
+                      className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Open Leave Dashboard
+                    </button>
                   </div>
-                ) : claims && claims.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Claim ID
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Category
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Amount
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {claims.map((claim: any) => (
-                          <tr key={claim._id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {claim._id.slice(-8)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {claim.category}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ₹{claim.grandTotal?.toLocaleString() || '0'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
-                                claim.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
-                                claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {claim.status.replace('_', ' ').toUpperCase()}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Date(claim.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => router.push(`/claims/${claim._id}`)}
-                                  className="text-blue-600 hover:text-blue-900"
-                                  title="View Details"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </button>
-                                {['submitted', 'rejected'].includes(claim.status) && (
-                                  <button
-                                    onClick={() => router.push(`/claims/${claim._id}/edit`)}
-                                    className="text-green-600 hover:text-green-900"
-                                    title="Edit Claim"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No claims found</p>
-                    <p className="text-sm text-gray-400 mt-1">Create your first claim to get started</p>
-                  </div>
-                )}
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

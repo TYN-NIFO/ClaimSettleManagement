@@ -9,7 +9,7 @@ import authService from '@/lib/authService';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
-  requiredRole?: 'employee' | 'supervisor' | 'finance_manager' | 'admin';
+  requiredRole?: 'employee' | 'finance_manager' | 'admin';
   redirectTo?: string;
 }
 
@@ -39,9 +39,8 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
       const userRole = user.role;
       const roleHierarchy = {
         employee: 1,
-        supervisor: 2,
-        finance_manager: 3,
-        admin: 4
+        finance_manager: 2,
+        admin: 3
       };
 
       const userRoleLevel = roleHierarchy[userRole as keyof typeof roleHierarchy] || 0;
@@ -103,9 +102,8 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
   if (requiredRole && user) {
     const roleHierarchy = {
       employee: 1,
-      supervisor: 2,
-      finance_manager: 3,
-      admin: 4
+      finance_manager: 2,
+      admin: 3
     };
 
     const userRoleLevel = roleHierarchy[user.role as keyof typeof roleHierarchy] || 0;

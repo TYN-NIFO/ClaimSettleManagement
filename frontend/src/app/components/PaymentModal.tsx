@@ -6,10 +6,10 @@ import { X, DollarSign } from 'lucide-react';
 interface PaymentModalProps {
   claim: any;
   onClose: () => void;
-  onMarkAsPaid: (claimId: string, channel?: string) => Promise<void>;
+  onPay: (claimId: string, channel: string, reference?: string) => Promise<void>;
 }
 
-export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentModalProps) {
+export default function PaymentModal({ claim, onClose, onPay }: PaymentModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,7 +17,7 @@ export default function PaymentModal({ claim, onClose, onMarkAsPaid }: PaymentMo
     setIsSubmitting(true);
     try {
       // Default to a generic channel since UX doesn't ask for one
-      await onMarkAsPaid(claim._id, 'Cash');
+      await onPay(claim._id, 'Cash');
       onClose();
     } catch (error) {
       console.error('Payment failed:', error);

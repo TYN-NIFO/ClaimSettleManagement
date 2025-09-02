@@ -264,6 +264,42 @@ const getSupervisors = async (req, res) => {
   }
 };
 
+// Get employee names for filtering
+const getEmployeeNames = async (req, res) => {
+  try {
+    const employees = await User.find(
+      { 
+        isActive: true,
+        role: { $in: ['employee', 'supervisor'] }
+      },
+      { 
+        _id: 1, 
+        name: 1, 
+        email: 1, 
+        department: 1,
+        role: 1
+      }
+    ).sort({ name: 1 });
+
+    res.json({
+      success: true,
+      data: employees.map(emp => ({
+        id: emp._id,
+        name: emp.name,
+        email: emp.email,
+        department: emp.department,
+        role: emp.role
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching employee names:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch employee names'
+    });
+  }
+};
+
 export {
   getUsers,
   getUserById,
@@ -271,5 +307,6 @@ export {
   updateUser,
   deactivateUser,
   resetPassword,
-  getSupervisors
+  getSupervisors,
+  getEmployeeNames
 };

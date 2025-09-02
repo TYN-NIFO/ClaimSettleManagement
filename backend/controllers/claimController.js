@@ -39,21 +39,12 @@ const getClaims = async (req, res) => {
     if (user.role === 'employee') {
       filter.employeeId = user._id;
       console.log('👤 Employee filter:', filter);
-    } else if (user.role === 'supervisor') {
-      // Supervisors see all claims they need to manage
-      filter.status = { $in: ['submitted', 'approved', 'rejected'] };
-      console.log('👥 Supervisor filter - all manageable claims:', filter);
-    } else if (user.role === 'finance_manager') {
-      // Finance managers see all claims for complete oversight
-      // No status filter - they can see all claim statuses
-      console.log('💰 Finance manager filter - all claims:', filter);
     }
-    // Admin can see all claims (no filter applied)
+    // Finance managers, executives, and admins see ALL claims (no filter applied)
     console.log('🔍 Final filter:', filter);
 
     const claims = await Claim.find(filter)
       .populate('employeeId', 'name email')
-      .populate('supervisorApproval.approvedBy', 'name email')
       .populate('financeApproval.approvedBy', 'name email')
       .populate('payment.paidBy', 'name email')
       .sort({ createdAt: -1 })
@@ -85,7 +76,6 @@ const getClaimById = async (req, res) => {
   try {
     const claim = await Claim.findById(req.params.id)
       .populate('employeeId', 'name email department')
-      .populate('supervisorApproval.approvedBy', 'name email')
       .populate('financeApproval.approvedBy', 'name email')
       .populate('payment.paidBy', 'name email');
 
@@ -122,19 +112,6 @@ const createClaim = async (req, res) => {
     if (user.role === 'employee') {
       if (employeeId !== user._id.toString()) {
         return res.status(403).json({ error: 'You can only create claims for yourself' });
-      }
-    } else if (user.role === 'supervisor') {
-      // Check if employee is assigned to this supervisor
-      const assignedEmployees = await User.find({
-        _id: employeeId,
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      });
-
-      if (assignedEmployees.length === 0) {
-        return res.status(403).json({ error: 'Employee not assigned to you' });
       }
     }
 
@@ -181,89 +158,12 @@ const createClaim = async (req, res) => {
   }
 };
 
-// Approve/reject claim by supervisor
-const approveClaim = async (req, res) => {
-  try {
-    const { action, notes } = req.body;
-    const user = req.user;
-    const claim = req.claim;
 
-    console.log('🔍 approveClaim called with:', {
-      action,
-      notes,
-      userRole: user.role,
-      userSupervisorLevel: user.supervisorLevel,
-      claimId: claim._id,
-      claimStatus: claim.status
-    });
 
-    if (user.role !== 'supervisor') {
-      return res.status(403).json({ error: 'Only supervisors can approve claims' });
-    }
-
-    // Check if claim can be approved
-    if (claim.status === 'rejected') {
-      return res.status(400).json({ error: 'Cannot approve a rejected claim' });
-    }
-
-    // Default to supervisor level 1 if not set
-    const supervisorLevel = user.supervisorLevel || 1;
-    
-    // Check if claim is in a state that can be approved
-    if (claim.status !== 'submitted') {
-      return res.status(400).json({ error: 'Claim cannot be approved at this stage' });
-    }
-
-    const policy = await Policy.findOne();
-    if (!policy) {
-      return res.status(500).json({ error: 'System policy not configured' });
-    }
-
-    if (action === 'approve') {
-      claim.status = 'approved';
-      claim.supervisorApproval = {
-        status: 'approved',
-        approvedBy: user._id,
-        approvedAt: new Date(),
-        notes: notes || ''
-      };
-    } else if (action === 'reject') {
-      claim.status = 'rejected';
-      claim.supervisorApproval = {
-        status: 'rejected',
-        approvedBy: user._id,
-        approvedAt: new Date(),
-        reason: notes || 'Rejected by supervisor',
-        notes: notes || ''
-      };
-    }
-
-    await claim.save();
-
-    console.log('✅ Claim updated successfully:', {
-      claimId: claim._id,
-      newStatus: claim.status,
-      supervisorApproval: claim.supervisorApproval
-    });
-
-    // Create audit log
-    await createAuditLog(user._id, 'APPROVE_CLAIM', 'CLAIM', {
-      claimId: claim._id,
-      action,
-      supervisorLevel: supervisorLevel
-    });
-
-    res.json(claim);
-  } catch (error) {
-    console.error('Approve claim error:', error);
-    res.status(500).json({ error: 'Failed to approve claim' });
-  }
-};
-
-// Finance manager approval
+// Finance manager approval (FIRST APPROVAL)
 const financeApprove = async (req, res) => {
   try {
-    const { action, notes } = req.body;
+    const { action, notes, reason } = req.body;
     const user = req.user;
     const claim = req.claim;
 
@@ -279,8 +179,8 @@ const financeApprove = async (req, res) => {
       return res.status(403).json({ error: 'Only finance managers can approve claims' });
     }
 
-    // Check if claim is ready for finance approval
-    if (claim.status !== 'approved') {
+    // Check if claim is ready for finance approval (FIRST APPROVAL)
+    if (claim.status !== 'submitted') {
       return res.status(400).json({ error: 'Claim not ready for finance approval' });
     }
 
@@ -298,7 +198,7 @@ const financeApprove = async (req, res) => {
         status: 'rejected',
         approvedBy: user._id,
         approvedAt: new Date(),
-        reason: notes || 'Rejected by finance manager',
+        reason: reason || notes || 'Rejected by finance manager',
         notes: notes || ''
       };
     }
@@ -324,7 +224,74 @@ const financeApprove = async (req, res) => {
   }
 };
 
-// Mark claim as paid
+// Executive approval (FINAL APPROVAL)
+const executiveApprove = async (req, res) => {
+  try {
+    const { action, notes, reason } = req.body;
+    const user = req.user;
+    const claim = req.claim;
+
+    console.log('🔍 executiveApprove called with:', {
+      action,
+      notes,
+      userRole: user.role,
+      claimId: claim._id,
+      claimStatus: claim.status
+    });
+
+    // Check if user is executive (CEO or CTO) - this is now handled by middleware
+    // but we keep the check for additional security
+    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
+    if (!isExecutive) {
+      return res.status(403).json({ error: 'Only executives can provide final approval' });
+    }
+
+    // Check if claim is ready for executive approval (FINAL APPROVAL)
+    if (claim.status !== 'finance_approved') {
+      return res.status(400).json({ error: 'Claim not ready for executive approval' });
+    }
+
+    if (action === 'approve') {
+      claim.status = 'executive_approved';
+      claim.executiveApproval = {
+        status: 'approved',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        notes: notes || ''
+      };
+    } else if (action === 'reject') {
+      claim.status = 'rejected';
+      claim.executiveApproval = {
+        status: 'rejected',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        reason: reason || notes || 'Rejected by executive',
+        notes: notes || ''
+      };
+    }
+
+    await claim.save();
+
+    console.log('✅ Executive claim updated successfully:', {
+      claimId: claim._id,
+      newStatus: claim.status,
+      executiveApproval: claim.executiveApproval
+    });
+
+    // Create audit log
+    await createAuditLog(user._id, 'EXECUTIVE_APPROVE', 'CLAIM', {
+      claimId: claim._id,
+      action
+    });
+
+    res.json(claim);
+  } catch (error) {
+    console.error('Executive approve error:', error);
+    res.status(500).json({ error: 'Failed to approve claim' });
+  }
+};
+
+// Mark claim as paid (AFTER EXECUTIVE APPROVAL)
 const markAsPaid = async (req, res) => {
   try {
     const { channel } = req.body;
@@ -341,8 +308,9 @@ const markAsPaid = async (req, res) => {
       return res.status(403).json({ error: 'Only finance managers can mark claims as paid' });
     }
 
-    if (claim.status !== 'finance_approved') {
-      return res.status(400).json({ error: 'Claim must be finance approved before marking as paid' });
+    // Check if claim is ready for payment (AFTER EXECUTIVE APPROVAL)
+    if (claim.status !== 'executive_approved') {
+      return res.status(400).json({ error: 'Claim must be executive approved before marking as paid' });
     }
 
     const policy = await Policy.findOne();
@@ -438,14 +406,6 @@ const getClaimStats = async (req, res) => {
     // Role-based filtering
     if (user.role === 'employee') {
       filter.employeeId = user._id;
-    } else if (user.role === 'supervisor') {
-      const assignedEmployees = await User.find({
-        $or: [
-          { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
-      }).select('_id');
-      filter.employeeId = { $in: assignedEmployees.map(emp => emp._id) };
     }
 
     const stats = await Claim.aggregate([
@@ -480,8 +440,8 @@ export {
   getClaims,
   getClaimById,
   createClaim,
-  approveClaim,
   financeApprove,
+  executiveApprove,
   markAsPaid,
   uploadAttachment,
   getClaimStats

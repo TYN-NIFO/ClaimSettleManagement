@@ -54,7 +54,7 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
 
 export const api = createApi({
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Claims', 'Policy', 'Users'],
+  tagTypes: ['Claims', 'Policy', 'Users', 'Leaves'],
   endpoints: (builder) => ({
     // Authentication
     token: builder.mutation({
@@ -201,7 +201,10 @@ export const api = createApi({
           ...params
         },
       }),
-      transformResponse: (response: any) => response.claims ? { ...response, claims: response.claims } : response,
+      transformResponse: (response: any) => {
+        // Return the full response object with claims array and pagination info
+        return response;
+      },
       providesTags: ['Claims'],
     }),
     getClaimStats: builder.query({
@@ -271,7 +274,18 @@ export const api = createApi({
       query: ({ id, action, reason, notes }) => ({
         url: `/claims/${id}/finance-approve`,
         method: 'POST',
-        body: { action, reason, notes },
+        body: { action, notes, reason },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Claims', id },
+        'Claims',
+      ],
+    }),
+    executiveApprove: builder.mutation({
+      query: ({ id, action, reason, notes }) => ({
+        url: `/claims/${id}/executive-approve`,
+        method: 'POST',
+        body: { action, notes, reason },
       }),
       invalidatesTags: (result, error, { id }) => [
         { type: 'Claims', id },
@@ -295,6 +309,93 @@ export const api = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: ['Claims'],
+    }),
+
+    // Leaves
+    createLeave: builder.mutation({
+      query: (leave) => ({
+        url: '/leaves',
+        method: 'POST',
+        body: leave,
+      }),
+      invalidatesTags: ['Leaves'],
+    }),
+    createBulkLeaves: builder.mutation({
+      query: (leaves) => ({
+        url: '/leaves/bulk',
+        method: 'POST',
+        body: { leaves },
+      }),
+      invalidatesTags: ['Leaves'],
+    }),
+    getLeaves: builder.query({
+      query: (params = {}) => ({
+        url: '/leaves',
+        params,
+      }),
+      transformResponse: (response: any) => response,
+      providesTags: ['Leaves'],
+    }),
+    getPendingLeaves: builder.query({
+      query: (params = {}) => ({
+        url: '/leaves/pending',
+        params,
+      }),
+      transformResponse: (response: any) => response,
+      providesTags: ['Leaves'],
+    }),
+    getLeaveAnalytics: builder.query({
+      query: (params = {}) => ({
+        url: '/leaves/analytics',
+        params,
+      }),
+      transformResponse: (response: any) => response,
+      providesTags: ['Leaves'],
+    }),
+    getTodayLeaves: builder.query({
+      query: () => '/leaves/today',
+      transformResponse: (response: any) => response,
+      providesTags: ['Leaves'],
+    }),
+    getLeavesByDateRange: builder.query({
+      query: ({ startDate, endDate }) => ({
+        url: '/leaves/by-date-range',
+        params: { startDate, endDate },
+      }),
+      transformResponse: (response: any) => response,
+      providesTags: ['Leaves'],
+    }),
+    updateLeave: builder.mutation({
+      query: ({ id, ...leave }) => ({
+        url: `/leaves/${id}`,
+        method: 'PUT',
+        body: leave,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Leaves', id },
+        'Leaves',
+      ],
+    }),
+    approveLeave: builder.mutation({
+      query: ({ id, action, notes, rejectionReason }) => ({
+        url: `/leaves/${id}/approve`,
+        method: 'POST',
+        body: { action, notes, rejectionReason },
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Leaves', id },
+        'Leaves',
+      ],
+    }),
+    deleteLeave: builder.mutation({
+      query: (id: string) => ({
+        url: `/leaves/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, id) => [
+        { type: 'Leaves', id },
+        'Leaves',
+      ],
     }),
 
     // Users (Admin only)
@@ -343,6 +444,12 @@ export const api = createApi({
       }),
       invalidatesTags: ['Users'],
     }),
+
+    // Get employee names for filtering
+    getEmployeeNames: builder.query({
+      query: () => '/users/employee-names',
+      providesTags: ['Users'],
+    }),
   }),
 });
 
@@ -372,6 +479,7 @@ export const {
   useUpdateClaimMutation,
   useApproveClaimMutation,
   useFinanceApproveMutation,
+  useExecutiveApproveMutation,
   useMarkPaidMutation,
   useDeleteClaimMutation,
   useGetClaimStatsQuery,
@@ -383,4 +491,16 @@ export const {
   useDeactivateUserMutation,
   useResetUserPasswordMutation,
   useDeleteUserMutation,
+      // Leaves
+    useCreateLeaveMutation,
+    useCreateBulkLeavesMutation,
+    useGetLeavesQuery,
+    useGetPendingLeavesQuery,
+    useGetLeaveAnalyticsQuery,
+    useGetTodayLeavesQuery,
+    useGetLeavesByDateRangeQuery,
+    useUpdateLeaveMutation,
+    useApproveLeaveMutation,
+    useDeleteLeaveMutation,
+    useGetEmployeeNamesQuery,
 } = api;

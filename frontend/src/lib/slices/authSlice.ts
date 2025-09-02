@@ -44,7 +44,7 @@ const authSlice = createSlice({
       state.error = null;
       state.isLoading = false;
       state.isInitialized = true;
-      // Persist to localStorage
+      // Store tokens in localStorage
       if (typeof window !== 'undefined') {
         console.log('💾 Storing auth data to localStorage:', {
           user: action.payload.user.email,

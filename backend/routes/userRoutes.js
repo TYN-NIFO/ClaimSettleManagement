@@ -9,6 +9,7 @@ import {
   deactivateUser,
   resetPassword,
   getSupervisors,
+  getEmployeeNames,
 } from "../controllers/userController.js";
 import { auth } from "../middleware/auth.js";
 import { requireAdmin, canAccessUser } from "../middleware/rbac.js";
@@ -150,6 +151,46 @@ router.get("/", auth, requireAdmin, getUsers);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get("/supervisors", auth, requireAdmin, getSupervisors);
+
+/**
+ * @swagger
+ * /users/employee-names:
+ *   get:
+ *     tags: [User Management]
+ *     summary: Get employee names for filtering
+ *     description: Retrieve a list of unique employee names for filtering purposes
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Employee names retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 employeeNames:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                     example: "John Doe"
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Forbidden - Admin access required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/employee-names', auth, getEmployeeNames);
 
 /**
  * @swagger

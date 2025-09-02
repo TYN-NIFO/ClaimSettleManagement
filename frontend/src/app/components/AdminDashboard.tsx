@@ -23,7 +23,8 @@ import {
   Trash2,
   AlertCircle,
   FolderOpen,
-  Plus
+  Plus,
+  Calendar
 } from 'lucide-react';
 import PolicyManager from './PolicyManager';
 import CategoryManager from './CategoryManager';
@@ -93,7 +94,8 @@ export default function AdminDashboard() {
     { id: 'overview', label: 'Overview', icon: FileText },
     { id: 'users', label: 'Users', icon: Users },
     { id: 'policy', label: 'Policy', icon: Settings },
-    { id: 'categories', label: 'Categories', icon: FolderOpen }
+    { id: 'categories', label: 'Categories', icon: FolderOpen },
+    { id: 'leave-dashboard', label: 'Leave Dashboard', icon: Calendar }
   ];
 
   const renderTabContent = () => {
@@ -310,7 +312,7 @@ export default function AdminDashboard() {
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
                               user.role === 'finance_manager' ? 'bg-blue-100 text-blue-800' :
-                              user.role === 'supervisor' ? 'bg-green-100 text-green-800' :
+                      
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {user.role.replace('_', ' ').toUpperCase()}
@@ -361,6 +363,28 @@ export default function AdminDashboard() {
 
       case 'categories':
         return <CategoryManager />;
+
+      case 'leave-dashboard':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Leave Dashboard</h2>
+            </div>
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="text-center py-8">
+                <Calendar className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+                <p className="text-gray-600 mb-2">Leave Dashboard</p>
+                <p className="text-sm text-gray-400">View comprehensive leave analytics and management</p>
+                <button
+                  onClick={() => router.push('/leave-dashboard')}
+                  className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Open Leave Dashboard
+                </button>
+              </div>
+            </div>
+          </div>
+        );
 
       default:
         return null;
