@@ -535,7 +535,7 @@ export default function ClaimList({
         <PaymentModal
           claim={payingClaim}
           onClose={() => setPayingClaim(null)}
-          onMarkAsPaid={handleMarkAsPaid}
+          onPay={handleMarkAsPaid}
         />
       )}
       {financeApproveClaim && (

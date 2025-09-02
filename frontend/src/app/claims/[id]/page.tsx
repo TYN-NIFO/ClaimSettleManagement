@@ -486,7 +486,7 @@ export default function ClaimViewPage() {
         <PaymentModal
           claim={claim}
           onClose={() => setIsPaymentOpen(false)}
-          onMarkAsPaid={handleMarkAsPaid}
+          onPay={handleMarkAsPaid}
         />
       )}
     </div>
