@@ -25,6 +25,7 @@ import {
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
 import LeaveMonthlyView from './LeaveMonthlyView';
+import EmployeeLeaveDashboard from './EmployeeLeaveDashboard';
 
 
 type ViewMode = 'claims' | 'leaves' | 'leave-dashboard';
@@ -384,24 +385,7 @@ export default function EmployeeDashboard() {
             )}
 
             {currentView === 'leave-dashboard' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-2xl font-bold text-gray-900">Leave Dashboard</h2>
-                </div>
-                <div className="bg-white rounded-lg shadow p-6">
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-blue-500 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">Leave Dashboard</p>
-                    <p className="text-sm text-gray-400">View comprehensive leave analytics and management</p>
-                    <button
-                      onClick={() => router.push('/leave-dashboard')}
-                      className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-                    >
-                      Open Leave Dashboard
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <EmployeeLeaveDashboard userId={user?._id} />
             )}
           </>
         )}

@@ -7,6 +7,7 @@ import AuthWrapper from '@/app/components/AuthWrapper';
 
 import PendingLeaveApprovals from '@/app/components/PendingLeaveApprovals';
 import LeaveAnalyticsDashboard from '@/app/components/LeaveAnalyticsDashboard';
+import { BarChart3 , ClipboardCheck } from 'lucide-react';
 
 type ViewMode = 'approvals' | 'analytics';
 
@@ -26,7 +27,7 @@ export default function LeaveDashboard() {
     return (
       <AuthWrapper>
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center">
+          <div className="text-center max-w-md mx-auto">
             <div className="text-gray-400 mb-4">
               <svg className="mx-auto h-12 w-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -34,7 +35,22 @@ export default function LeaveDashboard() {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
             <p className="text-gray-600 mb-4">Only CTO and CEO can access the Leave Management Dashboard.</p>
-            <p className="text-sm text-gray-500">Employees can manage their leaves from the Employee Dashboard.</p>
+            <p className="text-sm text-gray-500 mb-6">Employees can manage their leaves from the Employee Dashboard.</p>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.href = '/employee'}
+                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Go to Employee Dashboard
+              </button>
+              <button
+                onClick={() => window.location.href = '/submit-leave'}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+              >
+                Submit Leave Request
+              </button>
+            </div>
           </div>
         </div>
       </AuthWrapper>
@@ -42,10 +58,13 @@ export default function LeaveDashboard() {
   }
 
   const navigationItems = [
-    { key: 'approvals' as ViewMode, label: 'Pending Approvals', icon: '✅' },
-    { key: 'analytics' as ViewMode, label: 'Analytics', icon: '📊' }
+    { key: 'analytics' as ViewMode, label: 'Analytics', icon: <BarChart3 />}, 
+    { key: 'approvals' as ViewMode, label: 'Pending Approvals', icon: <ClipboardCheck /> }
+    
   ];
 
+
+  
   const renderContent = () => {
     switch (currentView) {
       case 'approvals':
