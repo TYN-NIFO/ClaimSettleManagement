@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
@@ -22,6 +22,8 @@ import ClaimList from './ClaimList';
 import FinanceApprovalModal from './FinanceApprovalModal';
 import PaymentModal from './PaymentModal';
 import { toast } from 'react-hot-toast';
+import FilterBar, { FilterState } from './FilterBar';
+import { categoryMaster } from '@/lib/categoryMaster';
 
 export default function FinanceDashboard() {
   const [currentView, setCurrentView] = useState<'claims' | 'leave-dashboard'>('claims');
@@ -32,6 +34,53 @@ export default function FinanceDashboard() {
   const router = useRouter();
   const [financeApprove] = useFinanceApproveMutation();
   const [markPaid] = useMarkPaidMutation();
+
+  // Filters state
+  const [filters, setFilters] = useState<FilterState>({
+    search: '',
+    employeeId: '',
+    category: '',
+    startDate: '',
+    endDate: '',
+    status: ''
+  });
+
+  const categoryNames = useMemo(() => categoryMaster.map(c => c.name), []);
+
+  const filteredClaims = useMemo(() => {
+    if (!claims || claims.length === 0) return [];
+    return claims.filter((claim: any) => {
+      // Search across employee name, category, and claim id suffix
+      if (filters.search) {
+        const needle = filters.search.toLowerCase();
+        const idPart = (claim._id || '').toLowerCase();
+        const employeeName = (claim.employeeId?.name || '').toLowerCase();
+        const category = (claim.category || '').toLowerCase();
+        if (!idPart.includes(needle) && !employeeName.includes(needle) && !category.includes(needle)) {
+          return false;
+        }
+      }
+
+      if (filters.employeeId && claim.employeeId?._id !== filters.employeeId) return false;
+      if (filters.category && claim.category !== filters.category) return false;
+      if (filters.status && claim.status !== filters.status) return false;
+
+      if (filters.startDate) {
+        const created = new Date(claim.createdAt);
+        const start = new Date(filters.startDate);
+        if (isFinite(created.getTime()) && created < start) return false;
+      }
+      if (filters.endDate) {
+        const created = new Date(claim.createdAt);
+        const end = new Date(filters.endDate);
+        // include end date day
+        end.setHours(23,59,59,999);
+        if (isFinite(created.getTime()) && created > end) return false;
+      }
+
+      return true;
+    });
+  }, [claims, filters]);
 
   // Modal state
   const [selectedClaim, setSelectedClaim] = useState(null);
@@ -227,13 +276,23 @@ export default function FinanceDashboard() {
               </div>
             )}
 
-            {/* Claims List */}
+            {/* Filters + Claims List */}
             <div className="bg-white shadow overflow-hidden sm:rounded-md">
-              <div className="px-4 py-5 sm:px-6">
-                <h2 className="text-lg font-medium text-gray-900">Claims Requiring Financial Review</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Review and approve claims for first approval, or mark executive-approved claims as paid
-                </p>
+              <div className="px-4 py-5 sm:px-6 space-y-4">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Claims Requiring Financial Review</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Review and approve claims for first approval, or mark executive-approved claims as paid
+                  </p>
+                </div>
+                <FilterBar
+                  onFiltersChange={setFilters}
+                  categories={categoryNames}
+                  showEmployeeFilter={true}
+                  showCategoryFilter={true}
+                  showSearchFilter={true}
+                  showDateFilter={true}
+                />
               </div>
               <div className="border-t border-gray-200">
                 {claimsLoading ? (
@@ -247,7 +306,7 @@ export default function FinanceDashboard() {
                   </div>
                 ) : (
                   <ClaimList 
-                    claims={claims || []} 
+                    claims={filteredClaims || []} 
                     onApprovalClick={handleApprovalClick}
                     onPaymentClick={handlePaymentClick}
                     showApprovalButtons={true}

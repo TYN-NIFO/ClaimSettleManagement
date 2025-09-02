@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
@@ -29,6 +29,8 @@ import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
 import ExecutiveApprovalModal from './ExecutiveApprovalModal';
 import { toast } from 'react-hot-toast';
+import FilterBar, { FilterState } from './FilterBar';
+import { categoryMaster } from '@/lib/categoryMaster';
 
 
 export default function ExecutiveDashboard() {
@@ -154,6 +156,50 @@ export default function ExecutiveDashboard() {
 
   const personalStats = calculatePersonalStats();
   const orgStats = calculateOrgStats();
+
+  // Filters for organization view
+  const [orgFilters, setOrgFilters] = useState<FilterState>({
+    search: '',
+    employeeId: '',
+    category: '',
+    startDate: '',
+    endDate: '',
+    status: ''
+  });
+
+  const categoryNames = useMemo(() => categoryMaster.map(c => c.name), []);
+
+  const filteredOrgClaims = useMemo(() => {
+    if (!claims || claims.length === 0) return [];
+    return claims.filter((claim: any) => {
+      if (orgFilters.search) {
+        const needle = orgFilters.search.toLowerCase();
+        const idPart = (claim._id || '').toLowerCase();
+        const employeeName = (claim.employeeId?.name || '').toLowerCase();
+        const category = (claim.category || '').toLowerCase();
+        if (!idPart.includes(needle) && !employeeName.includes(needle) && !category.includes(needle)) {
+          return false;
+        }
+      }
+      if (orgFilters.employeeId && claim.employeeId?._id !== orgFilters.employeeId) return false;
+      if (orgFilters.category && claim.category !== orgFilters.category) return false;
+      if (orgFilters.status && claim.status !== orgFilters.status) return false;
+
+      if (orgFilters.startDate) {
+        const created = new Date(claim.createdAt);
+        const start = new Date(orgFilters.startDate);
+        if (isFinite(created.getTime()) && created < start) return false;
+      }
+      if (orgFilters.endDate) {
+        const created = new Date(claim.createdAt);
+        const end = new Date(orgFilters.endDate);
+        end.setHours(23,59,59,999);
+        if (isFinite(created.getTime()) && created > end) return false;
+      }
+
+      return true;
+    });
+  }, [claims, orgFilters]);
 
   if (!isAuthenticated || !user) {
     return (
@@ -538,31 +584,23 @@ export default function ExecutiveDashboard() {
                   </div>
                 </div>
 
-                {/* Organization Claims List */}
+                {/* Organization Filters + Claims List */}
                 <div className="bg-white rounded-lg shadow mb-8">
-                  <div className="px-6 py-4 border-b border-gray-200">
+                  <div className="px-6 py-4 border-b border-gray-200 space-y-4">
                     <div className="flex justify-between items-center">
                       <div>
                         <h2 className="text-lg font-medium text-gray-900">Executive Claims Overview</h2>
                         <p className="text-sm text-gray-600">Review claims ready for executive approval and view past successful claims</p>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <label htmlFor="statusFilter" className="text-sm font-medium text-gray-700">Filter by Status:</label>
-                        <select
-                          id="statusFilter"
-                          className="border border-gray-300 rounded-md px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          onChange={(e) => {
-                            // You can implement filtering logic here if needed
-                            console.log('Filter changed to:', e.target.value);
-                          }}
-                        >
-                          <option value="all">All Claims</option>
-                          <option value="finance_approved">Ready for Approval</option>
-                          <option value="executive_approved">Executive Approved</option>
-                          <option value="paid">Paid Claims</option>
-                        </select>
-                      </div>
                     </div>
+                    <FilterBar
+                      onFiltersChange={setOrgFilters}
+                      categories={categoryNames}
+                      showEmployeeFilter={true}
+                      showCategoryFilter={true}
+                      showSearchFilter={true}
+                      showDateFilter={true}
+                    />
                   </div>
                   
                   <div className="p-6">
@@ -576,95 +614,13 @@ export default function ExecutiveDashboard() {
                         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                         <p className="text-red-600">Failed to load claims</p>
                       </div>
-                    ) : claims && claims.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Employee
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Category
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Amount
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Status
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Date
-                              </th>
-                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {claims.map((claim: any) => (
-                              <tr key={claim._id} className="hover:bg-gray-50">
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {claim.employeeId?.name || 'Unknown'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {claim.category}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  ₹{claim.grandTotal?.toLocaleString() || '0'}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
-                                    claim.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                    claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                    claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
-                                    claim.status === 'executive_approved' ? 'bg-green-100 text-green-800' :
-                                    claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {claim.status.replace('_', ' ').toUpperCase()}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {new Date(claim.createdAt).toLocaleDateString()}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                  <div className="flex space-x-2">
-                                    <button
-                                      onClick={() => router.push(`/claims/${claim._id}`)}
-                                      className="text-blue-600 hover:text-blue-900"
-                                      title="View Details"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </button>
-                                    {claim.status === 'finance_approved' && (
-                                      <button
-                                        onClick={() => handleApprovalClick(claim)}
-                                        className="text-green-600 hover:text-green-900"
-                                        title="Approve/Reject"
-                                      >
-                                        <CheckCircle className="h-4 w-4" />
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
                     ) : (
-                      <div className="text-center py-8">
-                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500">No claims found</p>
-                        <p className="text-sm text-gray-400 mt-1">
-                          {claims.length === 0 
-                            ? 'No expense claims have been submitted yet' 
-                            : 'No claims available'
-                          }
-                        </p>
-                      </div>
+                      <ClaimList
+                        claims={filteredOrgClaims}
+                        showApprovalButtons={false}
+                        showPaymentButtons={false}
+                        showEmployeeName={true}
+                      />
                     )}
                   </div>
                 </div>

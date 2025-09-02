@@ -124,19 +124,17 @@ export default function ClaimList({
     // Admin can edit all claims
     if (user.role === "admin") return true;
 
-    // Employees can only edit their own claims if status allows it
+    // Finance managers can edit any claim at any time
+    if (user.role === "finance_manager") return true;
+
+    // Executives can edit any claim at any time (identified by email currently)
+    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
+    if (isExecutive) return true;
+
+    // Employees can edit their own claims only before finance approval
     if (user.role === "employee") {
-      return (
-        claim.employeeId._id === user._id &&
-        ["submitted", "rejected"].includes(claim.status)
-      );
-    }
-
-
-
-    // Finance managers can see Edit for claims they created, except when already paid
-    if (user.role === "finance_manager") {
-      return claim.employeeId._id === user._id && claim.status !== "paid";
+      const isBeforeFinanceApproval = !["finance_approved", "executive_approved", "paid"].includes(claim.status);
+      return claim.employeeId._id === user._id && isBeforeFinanceApproval;
     }
 
     return false;
@@ -255,22 +253,17 @@ export default function ClaimList({
     // Admin can delete any claim
     if (user.role === "admin") return true;
 
-    // Employee can delete own claims if not approved
+    // Finance managers can delete any claim at any time
+    if (user.role === "finance_manager") return true;
+
+    // Executives can delete any claim at any time (identified by email currently)
+    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
+    if (isExecutive) return true;
+
+    // Employees can delete their own claims only before finance approval
     if (user.role === "employee") {
-      return (
-        claim.employeeId._id === user._id &&
-        ["submitted", "rejected"].includes(claim.status)
-      );
-    }
-
-
-
-    // Finance manager can only delete their own claims (not claims from other employees)
-    if (user.role === "finance_manager") {
-      return (
-        claim.employeeId._id === user._id &&
-        ["submitted", "rejected"].includes(claim.status)
-      );
+      const isBeforeFinanceApproval = !["finance_approved", "executive_approved", "paid"].includes(claim.status);
+      return claim.employeeId._id === user._id && isBeforeFinanceApproval;
     }
 
     return false;

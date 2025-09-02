@@ -509,7 +509,7 @@ router.get('/stats', auth, async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', auth, rbac(['employee', 'finance_manager', 'admin']), async (req, res) => {
+router.get('/:id', auth, rbac(['employee', 'finance_manager', 'executive', 'admin']), async (req, res) => {
   try {
     const claim = await Claim.findById(req.params.id)
       .populate('employeeId', 'name email')
@@ -612,7 +612,7 @@ router.get('/:id', auth, rbac(['employee', 'finance_manager', 'admin']), async (
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
+router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req, res) => {
   try {
     const claimId = req.params.id;
     const user = req.user;
@@ -628,18 +628,21 @@ router.patch('/:id', auth, upload.array('files', 50), async (req, res) => {
       updateData = req.body;
     }
 
-    // Find the existing claim
-    const existingClaim = await Claim.findById(claimId);
+    // Find the existing claim (available from canAccessClaim, fallback to DB)
+    const existingClaim = req.claim || await Claim.findById(claimId);
     if (!existingClaim) {
       return res.status(404).json({ error: 'Claim not found' });
     }
 
-    // Check permissions - only allow updates if:
-    // 1. User is the claim owner and claim is in editable state
-    // 2. User is admin
-    // 3. User can edit their own claims if status allows
+    // Check permissions - allow updates if:
+    // - Admin
+    // - Finance manager or Executive (full override)
+    // - Owner before finance approval (submitted/rejected)
+    const isExecutive = user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
     const canEdit = 
       user.role === 'admin' ||
+      user.role === 'finance_manager' ||
+      isExecutive ||
       (existingClaim.employeeId.toString() === user._id.toString() && 
        ['submitted', 'rejected'].includes(existingClaim.status));
 
@@ -1280,18 +1283,10 @@ router.delete('/:id', auth, async (req, res) => {
         reason = 'Can only delete own claims';
       }
 
-    } else if (user.role === 'finance_manager') {
-      // Finance managers can only delete their own claims (not claims from other employees)
-      if (claim.employeeId.toString() === user._id.toString()) {
-        if (['submitted', 'rejected'].includes(claim.status)) {
-          canDelete = true;
-          reason = 'Finance manager can delete own claim before approval';
-        } else {
-          reason = `Cannot delete claim with status: ${claim.status}`;
-        }
-      } else {
-        reason = 'Can only delete own claims';
-      }
+    } else if (user.role === 'finance_manager' || user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
+      // Finance managers and executives can delete any claim at any time
+      canDelete = true;
+      reason = `${user.role} can delete any claim`;
     }
 
     if (!canDelete) {
