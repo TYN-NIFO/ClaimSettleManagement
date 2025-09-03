@@ -195,17 +195,7 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
               <Calendar className="h-4 w-4 mr-2" />
               Calendar
             </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <List className="h-4 w-4 mr-2" />
-              List
-            </button>
+         
           </div>
         </div>
 
@@ -366,7 +356,7 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
                 
                 {/* Leave Indicators */}
                 <div className="space-y-1">
-                  {leaveData.slice(0, 3).map((leave: any, leaveIndex: number) => {
+                  {leaveData.slice(0, 11).map((leave: any, leaveIndex: number) => {
                     const isCurrentUser = leave.employeeEmail === currentUser?.email;
                     return (
                       <div
@@ -383,9 +373,9 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
                       </div>
                     );
                   })}
-                  {leaveData.length > 3 && (
+                  {leaveData.length > 11 && (
                     <div className="text-xs p-1 bg-gray-100 text-gray-600 rounded text-center">
-                      +{leaveData.length - 3} more
+                      +{leaveData.length - 11} more
                     </div>
                   )}
                 </div>
@@ -425,46 +415,6 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
             <span className="text-xs text-gray-600">Flexi</span>
           </div>
         </div>
-
-        {/* Team Leave Summary for Selected Month */}
-        {leaves && leaves.length > 0 && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <h4 className="text-sm font-medium text-gray-900 mb-3">
-              Team Leave Summary - {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {leaves.slice(0, 12).map((leave: any, index: number) => {
-                const isCurrentUser = leave.employeeEmail === currentUser?.email;
-                return (
-                  <div key={index} className={`text-xs bg-white p-2 rounded border ${isCurrentUser ? 'ring-1 ring-blue-400' : ''}`}>
-                    <div className={`font-medium ${isCurrentUser ? 'text-blue-900' : 'text-gray-900'}`}>
-                      {isCurrentUser ? 'You' : (leave.employee?.name || leave.employeeEmail)}
-                    </div>
-                    <div className="text-gray-600">{leave.leaveType}</div>
-                    <div className="text-xs text-gray-500">{new Date(leave.startDate).toLocaleDateString()}</div>
-                    {leave.reason && (
-                      <div className="text-xs text-gray-500 italic truncate">{leave.reason}</div>
-                    )}
-                    <div className={`text-xs mt-1 px-1 py-0.5 rounded ${
-                      leave.status === 'approved' ? 'bg-green-100 text-green-800' :
-                      leave.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {leave.status}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {leaves.length > 12 && (
-              <div className="mt-3 text-center">
-                <span className="text-xs text-gray-500">
-                  Showing 12 of {leaves.length} leave requests for this month
-                </span>
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
