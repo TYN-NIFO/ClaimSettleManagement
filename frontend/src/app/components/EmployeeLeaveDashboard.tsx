@@ -8,6 +8,9 @@ import LeaveForm from './LeaveForm';
 import LoadingSpinner from './LoadingSpinner';
 import { Calendar, List, Plus, Edit, Trash2, Filter } from 'lucide-react';
 
+const toLocalYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 interface EmployeeLeaveDashboardProps {
   userId?: string;
 }
@@ -35,8 +38,8 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
   const calendarFirstDay = new Date(selectedYear, selectedMonth - 1, 1);
   const calendarLastDay = new Date(selectedYear, selectedMonth, 0);
   const { data: calendarData, isLoading: calendarLoading } = useGetLeavesByDateRangeQuery({
-    startDate: calendarFirstDay.toISOString().split('T')[0],
-    endDate: calendarLastDay.toISOString().split('T')[0]
+    startDate: toLocalYmd(calendarFirstDay),
+    endDate: toLocalYmd(calendarLastDay)
   });
 
   // Fetch year summary for statistics
@@ -274,11 +277,10 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
   }
 
   const getLeaveDataForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = toLocalYmd(date);
     return leaves.filter((leave: any) => {
-      // Show all employees' leaves for better team coordination
       const leaveDate = new Date(leave.startDate);
-      const leaveDateStr = leaveDate.toISOString().split('T')[0];
+      const leaveDateStr = toLocalYmd(leaveDate);
       return leaveDateStr === dateStr;
     });
   };

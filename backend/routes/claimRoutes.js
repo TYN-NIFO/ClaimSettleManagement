@@ -9,7 +9,7 @@ import User from '../models/User.js';
 import { validateAgainstPolicy, computeClaimTotals, getCurrentPolicy } from '../services/policyValidation.js';
 import storageService from '../services/storage.js';
 import { createAuditLog } from '../controllers/authController.js';
-import { financeApprove, executiveApprove, markAsPaid } from '../controllers/claimController.js';
+import { createClaim, financeApprove, executiveApprove, markAsPaid } from '../controllers/claimController.js';
 
 const router = express.Router();
 
@@ -114,6 +114,7 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
     const claimData = JSON.parse(req.body.claimData || '{}');
     const fileMapping = JSON.parse(req.body.fileMapping || '{}');
     claimData.employeeId = req.user._id;
+    claimData.createdBy = req.user._id;
 
     console.log('Claim creation request:', {
       body: req.body,
@@ -161,7 +162,7 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
     const totals = await computeClaimTotals(claimData, policy);
     claimData.grandTotal = totals.grandTotal;
     claimData.netPayable = totals.netPayable;
-    claimData.createdBy = req.user._id;
+    // Let the controller handle the status based on user role
 
     console.log('Final claim data before creation:', {
       employeeId: claimData.employeeId,
@@ -203,23 +204,45 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
       }
     }
 
-    // Create claim
-    const claim = new Claim(claimData);
-    await claim.save();
+    // Process uploaded files and attach to line items
+    if (req.files && req.files.length > 0) {
+      console.log('Processing uploaded files:', req.files.length);
+      
+      for (const file of req.files) {
+        try {
+          // Store file using storage service
+          const result = await storageService.save(file);
+          const attachment = {
+            fileId: result.fileId,
+            name: file.originalname,
+            size: file.size,
+            mime: file.mimetype,
+            storageKey: result.storageKey,
+            label: 'supporting_doc'
+          };
 
-    // Create audit log
-    await createAuditLog(req.user._id, 'CREATE_CLAIM', 'CLAIM', {
-      claimId: claim._id,
-      employeeId: claimData.employeeId,
-      grandTotal: claimData.grandTotal,
-      category: claimData.category,
-      filesUploaded: req.files ? req.files.length : 0
-    });
+          // Find which line item this file belongs to based on file mapping
+          const lineItemIndex = fileMapping[file.originalname] || 0;
+          if (claimData.lineItems && claimData.lineItems[lineItemIndex]) {
+            if (!claimData.lineItems[lineItemIndex].attachments) {
+              claimData.lineItems[lineItemIndex].attachments = [];
+            }
+            claimData.lineItems[lineItemIndex].attachments.push(attachment);
+          }
+        } catch (fileError) {
+          console.error('Error processing file:', file.originalname, fileError);
+          // Continue processing other files
+        }
+      }
+    }
 
-    res.status(201).json(claim);
+    // Process the claim creation through the controller
+    req.body = claimData;
+    return createClaim(req, res);
   } catch (error) {
     console.error('Create claim error:', error);
-    res.status(500).json({ error: 'Failed to create claim' });
+    console.error('Error in claim creation route:', error);
+    res.status(500).json({ error: 'Failed to create claim', details: error.message });
   }
 });
 
@@ -617,15 +640,36 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
     const claimId = req.params.id;
     const user = req.user;
 
-    // Parse form data if files are included
+    // Parse the request data
     let updateData;
     let fileMapping = {};
     
     if (req.files && req.files.length > 0) {
+      // Handle multipart/form-data (with files)
       updateData = JSON.parse(req.body.claimData || '{}');
       fileMapping = JSON.parse(req.body.fileMapping || '{}');
-    } else {
+    } else if (req.is('application/json')) {
+      // Handle JSON body
       updateData = req.body;
+    } else if (req.is('application/x-www-form-urlencoded') || req.is('multipart/form-data')) {
+      // Handle form data without files
+      updateData = req.body;
+      if (typeof updateData.claimData === 'string') {
+        updateData = JSON.parse(updateData.claimData);
+      }
+    } else {
+      return res.status(400).json({ error: 'Invalid content type' });
+    }
+
+    console.log('Update data received:', {
+      updateData,
+      filesCount: req.files?.length || 0,
+      fileMapping
+    });
+
+    // Ensure required fields are present
+    if (!updateData || Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No update data provided' });
     }
 
     // Find the existing claim (available from canAccessClaim, fallback to DB)
@@ -675,10 +719,8 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
     updateData.grandTotal = totals.grandTotal;
     updateData.netPayable = totals.netPayable;
 
-    // Process new uploaded files and REPLACE existing attachments for line items
+    // Process uploaded files and attach to line items
     if (req.files && req.files.length > 0) {
-      console.log('Processing uploaded files for update (replacing existing):', req.files.length);
-      
       for (const file of req.files) {
         try {
           // Store file using storage service
@@ -694,11 +736,25 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
 
           // Find which line item this file belongs to based on file mapping
           const lineItemIndex = fileMapping[file.originalname] || 0;
-          if (updateData.lineItems && updateData.lineItems[lineItemIndex]) {
-            // REPLACE existing attachments instead of adding to them
-            updateData.lineItems[lineItemIndex].attachments = [attachment];
-            console.log(`Replaced attachment for line item ${lineItemIndex} with ${file.originalname}`);
+          
+          // Initialize lineItems array if it doesn't exist
+          if (!updateData.lineItems) {
+            updateData.lineItems = [];
           }
+          
+          // Ensure the line item exists
+          while (updateData.lineItems.length <= lineItemIndex) {
+            updateData.lineItems.push({ attachments: [] });
+          }
+          
+          // Initialize attachments array if it doesn't exist
+          if (!updateData.lineItems[lineItemIndex].attachments) {
+            updateData.lineItems[lineItemIndex].attachments = [];
+          }
+          
+          // Add the new attachment
+          updateData.lineItems[lineItemIndex].attachments.push(attachment);
+          console.log(`Added attachment for line item ${lineItemIndex}: ${file.originalname}`);
         } catch (fileError) {
           console.error('Error processing file during update:', file.originalname, fileError);
           // Continue processing other files
@@ -706,29 +762,37 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
       }
     }
 
-    // Reset status to 'submitted' if claim was previously rejected and is being updated
-    if (existingClaim.status === 'rejected') {
-      updateData.status = 'submitted';
-      // Clear previous approval/rejection data
+    // existingClaim is already available from canAccessClaim middleware
 
-      updateData.financeApproval = {
-        status: 'pending'
-      };
+    // If updating status, handle special cases
+    if (updateData.status) {
+      // If claim was rejected and is being resubmitted
+      if (existingClaim.status === 'rejected' && updateData.status === 'submitted') {
+        updateData.financeApproval = { status: 'pending' };
+        updateData.executiveApproval = { status: 'pending' };
+      }
+      
+      // If finance manager is updating status to finance_approved
+      if (user.email === 'finance@theyellow.network' && updateData.status === 'finance_approved') {
+        updateData.financeApproval = {
+          status: 'approved',
+          approvedBy: user._id,
+          approvedAt: new Date(),
+          notes: 'Approved by finance manager'
+        };
+      }
     }
 
     // Update the claim
     const updatedClaim = await Claim.findByIdAndUpdate(
       claimId,
-      {
-        ...updateData,
-        updatedAt: new Date()
-      },
+      { $set: updateData },
       { new: true, runValidators: true }
-    ).populate('employeeId', 'name email')
-     .populate('supervisorApproval.approvedBy', 'name email')
-     .populate('financeApproval.approvedBy', 'name email')
-     .populate('executiveApproval.approvedBy', 'name email')
-     .populate('payment.paidBy', 'name email');
+    );
+
+    if (!updatedClaim) {
+      return res.status(404).json({ error: 'Failed to update claim' });
+    }
 
     // Create audit log
     await createAuditLog(user._id, 'UPDATE_CLAIM', 'CLAIM', {

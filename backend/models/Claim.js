@@ -62,7 +62,7 @@ const ClaimSchema = new mongoose.Schema({
   netPayable: Number,
   status: { 
     type: String, 
-    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'executive_approved', 'paid'], 
+    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'executive_approved', 'paid', 'done'], 
     default: 'submitted' 
   },
   policyVersion: String,

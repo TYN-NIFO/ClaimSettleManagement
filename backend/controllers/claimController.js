@@ -126,8 +126,8 @@ const createClaim = async (req, res) => {
     const advancesTotal = advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
     const netPayable = grandTotal - advancesTotal;
 
-    // Create claim
-    const claim = new Claim({
+    // Initialize claim with common fields
+    const claimData = {
       employeeId,
       createdBy: user._id,
       businessUnit,
@@ -136,19 +136,79 @@ const createClaim = async (req, res) => {
       lineItems,
       grandTotal,
       netPayable
+      // Status will be set based on user role below
+    };
+
+    console.log('🔍 User creating claim:', {
+      userId: user._id,
+      userEmail: user.email,
+      userRole: user.role
     });
 
-    await claim.save();
+    // Set status based on user role
+    if (user.email === 'finance@theyellow.network') {
+      console.log('🔧 Setting up finance manager claim with finance_approved status');
+      claimData.status = 'finance_approved';
+      claimData.financeApproval = {
+        status: 'approved',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        notes: 'Auto-approved as created by finance manager'
+      };
+      console.log('✅ Claim data after finance manager setup:', {
+        status: claimData.status,
+        financeApproval: claimData.financeApproval
+      });
+    } 
+    // Special handling for executive (gg) claims
+    else if (user.email === 'gg@theyellownetwork.com') {
+      claimData.status = 'done';
+      claimData.executiveApproval = {
+        status: 'approved',
+        approvedBy: user._id,
+        approvedAt: new Date(),
+        notes: 'Auto-approved as created by executive'
+      };
+    } 
+    // Default status for all other users
+    else {
+      claimData.status = 'submitted';
+    }
 
-    // Add timeline entry
-    // await claim.addTimelineEntry(user._id, 'CREATED', 'Claim submitted');
+    // Create claim with final data
+    console.log('📝 Final claim data before save:', {
+      status: claimData.status,
+      financeApproval: claimData.financeApproval,
+      executiveApproval: claimData.executiveApproval,
+      user: {
+        id: user._id,
+        email: user.email,
+        role: user.role
+      }
+    });
+    
+    const claim = new Claim(claimData);
+    
+    console.log('📝 Claim instance before save:', {
+      status: claim.status,
+      financeApproval: claim.financeApproval,
+      executiveApproval: claim.executiveApproval,
+    });
+    await claim.save();
+    console.log('✅ Claim after save:', {
+      status: claim.status,
+      financeApproval: claim.financeApproval,
+      _id: claim._id
+    });
 
     // Create audit log
     await createAuditLog(user._id, 'CREATE_CLAIM', 'CLAIM', {
       claimId: claim._id,
       employeeId,
       grandTotal,
-      category
+      category,
+      status: claim.status,
+      autoApproved: claim.status !== 'submitted'
     });
 
     res.status(201).json(claim);
@@ -239,25 +299,32 @@ const executiveApprove = async (req, res) => {
       claimStatus: claim.status
     });
 
-    // Check if user is executive (CEO or CTO) - this is now handled by middleware
-    // but we keep the check for additional security
-    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
-    if (!isExecutive) {
-      return res.status(403).json({ error: 'Only executives can provide final approval' });
+    if (user.role !== 'executive') {
+      return res.status(403).json({ error: 'Only executives can give final approval' });
     }
 
     // Check if claim is ready for executive approval (FINAL APPROVAL)
+    // Also allow if claim was created by finance manager and is in finance_approved status
     if (claim.status !== 'finance_approved') {
       return res.status(400).json({ error: 'Claim not ready for executive approval' });
     }
 
     if (action === 'approve') {
+      // If claim was created by finance manager, mark as 'done' directly
+      // Otherwise, mark as 'executive_approved' (can be marked as paid later)
       claim.status = 'executive_approved';
+      
+      // Check if the claim was created by finance manager
+      const createdByUser = await User.findById(claim.createdBy);
+      if (createdByUser && createdByUser.email === 'finance@theyellow.network') {
+        claim.status = 'done';
+      }
+      
       claim.executiveApproval = {
         status: 'approved',
         approvedBy: user._id,
         approvedAt: new Date(),
-        notes: notes || ''
+        notes: notes || (claim.status === 'done' ? 'Auto-marked as done' : '')
       };
     } else if (action === 'reject') {
       claim.status = 'rejected';
@@ -265,7 +332,7 @@ const executiveApprove = async (req, res) => {
         status: 'rejected',
         approvedBy: user._id,
         approvedAt: new Date(),
-        reason: reason || notes || 'Rejected by executive',
+        reason: reason || 'Rejected by executive',
         notes: notes || ''
       };
     }
