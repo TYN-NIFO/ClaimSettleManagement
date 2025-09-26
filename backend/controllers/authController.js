@@ -11,11 +11,11 @@ import AuditLog from '../models/AuditLog.js';
 // Token configuration
 const TOKEN_CONFIG = {
   accessToken: {
-    expiresIn: '15m',
+    expiresIn: process.env.JWT_EXPIRES_IN || '2h',
     algorithm: 'HS256'
   },
   refreshToken: {
-    expiresIn: '30d',
+    expiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d',
     algorithm: 'HS256'
   }
 };
