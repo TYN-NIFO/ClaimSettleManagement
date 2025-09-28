@@ -85,7 +85,8 @@ export const categoryMaster: Category[] = [
     subCategories: [
       { name: "Professional Body Memberships", itc: "Blocked if personal; Eligible if org-level" },
       { name: "SaaS/Tools – Sales & Marketing", itc: "Eligible" },
-      { name: "SaaS/Tools – General/IT", itc: "Eligible" }
+      { name: "SaaS/Tools – General/IT", itc: "Eligible" },
+      { name: "Admin software subscription", itc: "Eligible" }
     ]
   },
   {
@@ -94,7 +95,8 @@ export const categoryMaster: Category[] = [
       { name: "Stationery & Office Supplies", itc: "Eligible" },
       { name: "Courier/Postage", itc: "Eligible" },
       { name: "Printing/Photocopy", itc: "Eligible" },
-      { name: "Communication – Mobile/Data Reimbursement", itc: "Eligible if GST bill to company GSTIN" }
+      { name: "Communication – Mobile/Data Reimbursement", itc: "Eligible if GST bill to company GSTIN" },
+      { name: "Rent", itc: "Eligible" }
     ]
   },
   {

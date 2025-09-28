@@ -53,6 +53,7 @@ export const categoryMaster = [
       { name: "Professional Memberships", itc: "Eligible" },
       { name: "Industry Publications", itc: "Eligible" },
       { name: "Online Services/Tools", itc: "Eligible" },
+      { name: "Admin software subscription", itc: "Eligible" },
     ],
   },
   {
@@ -61,6 +62,7 @@ export const categoryMaster = [
       { name: "Printing/Photocopy", itc: "Eligible" },
       { name: "Stationery & Office Supplies", itc: "Eligible" },
       { name: "Courier/Postage", itc: "Eligible" },
+      { name: "Rent", itc: "Eligible" },
     ],
   },
   {
