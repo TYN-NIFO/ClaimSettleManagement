@@ -9,12 +9,20 @@ export class StorageService {
   constructor() {
     this.uploadDir = path.join(process.cwd(), "uploads");
     this.useCloudStorage =
-      process.env.NODE_ENV === "production" &&
-      process.env.AZURE_STORAGE_CONNECTION_STRING;
+      process.env.AZURE_STORAGE_CONNECTION_STRING &&
+      process.env.AZURE_STORAGE_CONNECTION_STRING.trim() !== "";
+
+    console.log("Storage Service Initialization:", {
+      hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
+      connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
+      useCloudStorage: this.useCloudStorage,
+      nodeEnv: process.env.NODE_ENV
+    });
 
     if (this.useCloudStorage) {
       this.initializeAzureBlob();
     } else {
+      console.log("Using local storage - Azure not configured");
       this.ensureUploadDir();
     }
   }
@@ -30,7 +38,7 @@ export class StorageService {
         process.env.AZURE_STORAGE_CONNECTION_STRING
       );
 
-      this.containerName = process.env.AZURE_STORAGE_CONTAINER || "claim-files";
+      this.containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || process.env.AZURE_STORAGE_CONTAINER || "claim-files";
       this.containerClient = this.blobServiceClient.getContainerClient(
         this.containerName
       );

@@ -98,38 +98,30 @@ const createClaim = async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
+    // Extract data from processed claimData (set by route)
     const {
       employeeId,
       businessUnit,
       category,
       advances,
-      lineItems
+      lineItems,
+      grandTotal,
+      netPayable,
+      createdBy
     } = req.body;
 
     const user = req.user;
 
-    // Validate employee assignment
-    if (user.role === 'employee') {
-      if (employeeId !== user._id.toString()) {
-        return res.status(403).json({ error: 'You can only create claims for yourself' });
-      }
-    }
+    // Employee assignment validation is handled in the route
+    // The route already sets employeeId = req.user._id for employees
 
-    // Get policy for validation
-    const policy = await Policy.findOne();
-    if (!policy) {
-      return res.status(500).json({ error: 'System policy not configured' });
-    }
+    // Totals are already calculated by the route
+    // Use the pre-calculated values from the route
 
-    // Calculate totals using amountInINR for line items
-    const grandTotal = lineItems.reduce((sum, item) => sum + (item.amountInINR || 0), 0);
-    const advancesTotal = advances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
-    const netPayable = grandTotal - advancesTotal;
-
-    // Initialize claim with common fields
+    // Initialize claim with common fields (using pre-calculated values from route)
     const claimData = {
       employeeId,
-      createdBy: user._id,
+      createdBy: createdBy || user._id,
       businessUnit,
       category,
       advances,

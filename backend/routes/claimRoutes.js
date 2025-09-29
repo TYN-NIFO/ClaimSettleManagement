@@ -204,38 +204,6 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
       }
     }
 
-    // Process uploaded files and attach to line items
-    if (req.files && req.files.length > 0) {
-      console.log('Processing uploaded files:', req.files.length);
-      
-      for (const file of req.files) {
-        try {
-          // Store file using storage service
-          const result = await storageService.save(file);
-          const attachment = {
-            fileId: result.fileId,
-            name: file.originalname,
-            size: file.size,
-            mime: file.mimetype,
-            storageKey: result.storageKey,
-            label: 'supporting_doc'
-          };
-
-          // Find which line item this file belongs to based on file mapping
-          const lineItemIndex = fileMapping[file.originalname] || 0;
-          if (claimData.lineItems && claimData.lineItems[lineItemIndex]) {
-            if (!claimData.lineItems[lineItemIndex].attachments) {
-              claimData.lineItems[lineItemIndex].attachments = [];
-            }
-            claimData.lineItems[lineItemIndex].attachments.push(attachment);
-          }
-        } catch (fileError) {
-          console.error('Error processing file:', file.originalname, fileError);
-          // Continue processing other files
-        }
-      }
-    }
-
     // Process the claim creation through the controller
     req.body = claimData;
     return createClaim(req, res);
