@@ -13,6 +13,12 @@ class SendGridEmailService {
     try {
       const apiKey = process.env.SENDGRID_API_KEY;
       
+      console.log('🔑 SendGrid API Key loaded:', {
+        hasKey: !!apiKey,
+        keyLength: apiKey ? apiKey.length : 0,
+        keyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'none'
+      });
+      
       if (!apiKey) {
         console.warn('⚠️ SENDGRID_API_KEY not configured. Email sending will be disabled.');
         return;
@@ -75,7 +81,8 @@ class SendGridEmailService {
         error: error.message,
         code: error.code,
         to: email,
-        response: error.response?.body
+        response: error.response?.body,
+        details: error.response?.body?.errors || 'No detailed errors'
       });
       throw new Error('Failed to send password reset email');
     }
