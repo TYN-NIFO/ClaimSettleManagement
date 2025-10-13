@@ -1,68 +1,45 @@
-import nodemailer from 'nodemailer';
+import sgMail from '@sendgrid/mail';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: './config.env' });
 
-class EmailService {
+class SendGridEmailService {
   constructor() {
-    this.transporter = null;
-    this.initializeTransporter();
+    this.initialized = false;
+    this.initializeSendGrid();
   }
 
-  initializeTransporter() {
+  initializeSendGrid() {
     try {
-      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-      const isSecure = smtpPort === 465; // Use secure for port 465
+      const apiKey = process.env.SENDGRID_API_KEY;
       
-      console.log('📧 Initializing Email Service with config:', {
-        host: process.env.SMTP_HOST,
-        port: smtpPort,
-        secure: isSecure,
-        user: process.env.SMTP_USER,
-        from: process.env.SMTP_FROM,
-        hasPassword: !!process.env.SMTP_PASS
-      });
-      
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: smtpPort,
-        secure: isSecure, // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false
-        },
-        connectionTimeout: 10000, // 10 seconds
-        greetingTimeout: 10000,
-        socketTimeout: 10000,
-        logger: true, // Enable logging
-        debug: process.env.NODE_ENV !== 'production' // Debug in development
-      });
+      if (!apiKey) {
+        console.warn('⚠️ SENDGRID_API_KEY not configured. Email sending will be disabled.');
+        return;
+      }
 
-      // Verify connection configuration
-      this.transporter.verify((error, success) => {
-        if (error) {
-          console.error('❌ Email service verification failed:', {
-            error: error.message,
-            code: error.code,
-            command: error.command,
-            host: process.env.SMTP_HOST,
-            port: smtpPort
-          });
-        } else {
-          console.log('✅ Email service is ready to send messages');
-        }
+      sgMail.setApiKey(apiKey);
+      this.initialized = true;
+      
+      console.log('✅ SendGrid Email Service initialized successfully');
+      console.log('📧 Email Service Config:', {
+        from: process.env.SMTP_FROM || process.env.EMAIL_FROM,
+        provider: 'SendGrid',
+        frontendUrl: process.env.FRONTEND_URL
       });
     } catch (error) {
-      console.error('❌ Failed to initialize email transporter:', error);
+      console.error('❌ Failed to initialize SendGrid:', error);
     }
   }
 
   async sendPasswordResetEmail(email, resetToken, userName) {
     try {
-      console.log('📧 Attempting to send password reset email:', {
+      if (!this.initialized) {
+        console.error('❌ SendGrid not initialized. Cannot send email.');
+        throw new Error('Email service not configured');
+      }
+
+      console.log('📧 Attempting to send password reset email via SendGrid:', {
         to: email,
         userName: userName,
         frontendUrl: process.env.FRONTEND_URL,
@@ -72,34 +49,33 @@ class EmailService {
       const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
       const expiryTime = '1 hour';
 
-      const mailOptions = {
-        from: {
-          name: 'The Yellow Network Claims',
-          address: process.env.SMTP_FROM
-        },
+      const msg = {
         to: email,
+        from: {
+          email: process.env.SMTP_FROM || process.env.EMAIL_FROM,
+          name: 'The Yellow Network Claims'
+        },
         subject: 'Password Reset Request - Claims Management System',
+        text: this.getPasswordResetTextVersion(userName, resetUrl, expiryTime),
         html: this.getPasswordResetTemplate(userName, resetUrl, expiryTime),
-        text: this.getPasswordResetTextVersion(userName, resetUrl, expiryTime)
       };
 
-      console.log('📧 Connecting to SMTP server...');
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('✅ Password reset email sent successfully:', {
-        messageId: info.messageId,
+      console.log('📧 Sending email via SendGrid API...');
+      const response = await sgMail.send(msg);
+      
+      console.log('✅ Password reset email sent successfully via SendGrid:', {
         to: email,
-        accepted: info.accepted,
-        rejected: info.rejected,
-        response: info.response
+        statusCode: response[0].statusCode,
+        headers: response[0].headers
       });
-      return { success: true, messageId: info.messageId };
+
+      return { success: true, provider: 'SendGrid', statusCode: response[0].statusCode };
     } catch (error) {
-      console.error('❌ Error sending password reset email:', {
+      console.error('❌ Error sending password reset email via SendGrid:', {
         error: error.message,
         code: error.code,
-        command: error.command,
         to: email,
-        stack: error.stack
+        response: error.response?.body
       });
       throw new Error('Failed to send password reset email');
     }
@@ -167,10 +143,6 @@ class EmailService {
             border-radius: 6px;
             font-weight: 600;
             font-size: 16px;
-            transition: transform 0.2s;
-          }
-          .reset-button:hover {
-            transform: translateY(-2px);
           }
           .alternative-link {
             margin-top: 25px;
@@ -187,9 +159,6 @@ class EmailService {
             padding: 15px;
             margin: 25px 0;
             border-radius: 4px;
-          }
-          .expiry-notice strong {
-            color: #856404;
           }
           .security-notice {
             background-color: #f8f9fa;
@@ -209,10 +178,6 @@ class EmailService {
             text-align: center;
             color: #666;
             font-size: 12px;
-          }
-          .footer a {
-            color: #667eea;
-            text-decoration: none;
           }
         </style>
       </head>
@@ -288,23 +253,29 @@ This is an automated message from Claims Management System.
 
   async sendPasswordResetConfirmation(email, userName) {
     try {
-      const mailOptions = {
-        from: {
-          name: 'The Yellow Network Claims',
-          address: process.env.SMTP_FROM
-        },
+      if (!this.initialized) {
+        console.error('❌ SendGrid not initialized. Cannot send email.');
+        return { success: false, error: 'Email service not configured' };
+      }
+
+      const msg = {
         to: email,
+        from: {
+          email: process.env.SMTP_FROM || process.env.EMAIL_FROM,
+          name: 'The Yellow Network Claims'
+        },
         subject: 'Password Successfully Reset - Claims Management System',
+        text: this.getPasswordResetConfirmationTextVersion(userName),
         html: this.getPasswordResetConfirmationTemplate(userName),
-        text: this.getPasswordResetConfirmationTextVersion(userName)
       };
 
-      const info = await this.transporter.sendMail(mailOptions);
-      console.log('Password reset confirmation email sent:', info.messageId);
-      return { success: true, messageId: info.messageId };
+      console.log('📧 Sending password reset confirmation via SendGrid...');
+      const response = await sgMail.send(msg);
+      console.log('✅ Password reset confirmation email sent via SendGrid');
+      
+      return { success: true, provider: 'SendGrid', statusCode: response[0].statusCode };
     } catch (error) {
-      console.error('Error sending password reset confirmation email:', error);
-      // Don't throw error here as password was already reset
+      console.error('❌ Error sending confirmation email via SendGrid:', error.message);
       return { success: false, error: error.message };
     }
   }
@@ -431,5 +402,5 @@ This is an automated message from Claims Management System.
   }
 }
 
-export default new EmailService();
+export default new SendGridEmailService();
 

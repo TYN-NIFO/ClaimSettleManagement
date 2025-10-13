@@ -8,6 +8,18 @@ import storageService from '../services/storage.js';
 import RefreshToken from '../models/RefreshToken.js';
 import AuditLog from '../models/AuditLog.js';
 import emailService from '../services/emailService.js';
+import sendgridEmailService from '../services/sendgridEmailService.js';
+
+// Determine which email service to use
+const getEmailService = () => {
+  // Prefer SendGrid if API key is configured (more reliable in cloud environments)
+  if (process.env.SENDGRID_API_KEY) {
+    console.log('📧 Using SendGrid Email Service');
+    return sendgridEmailService;
+  }
+  console.log('📧 Using SMTP Email Service');
+  return emailService;
+};
 
 // Token configuration
 const TOKEN_CONFIG = {
@@ -516,14 +528,15 @@ const forgotPassword = async (req, res) => {
 
     // Send password reset email
     try {
-      await emailService.sendPasswordResetEmail(
+      const activeEmailService = getEmailService();
+      await activeEmailService.sendPasswordResetEmail(
         user.email,
         resetToken,
         user.name
       );
-      console.log('Password reset email sent to:', user.email);
+      console.log('✅ Password reset email sent to:', user.email);
     } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError);
+      console.error('❌ Failed to send password reset email:', emailError);
       // Don't reveal email sending failure to user for security
       // Log it for debugging but still return success message
     }
@@ -586,10 +599,11 @@ const resetPassword = async (req, res) => {
 
     // Send confirmation email
     try {
-      await emailService.sendPasswordResetConfirmation(user.email, user.name);
-      console.log('Password reset confirmation email sent to:', user.email);
+      const activeEmailService = getEmailService();
+      await activeEmailService.sendPasswordResetConfirmation(user.email, user.name);
+      console.log('✅ Password reset confirmation email sent to:', user.email);
     } catch (emailError) {
-      console.error('Failed to send confirmation email:', emailError);
+      console.error('❌ Failed to send confirmation email:', emailError);
       // Don't fail the request if confirmation email fails
     }
 
