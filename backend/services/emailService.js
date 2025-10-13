@@ -11,17 +11,23 @@ class EmailService {
 
   initializeTransporter() {
     try {
+      const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+      const isSecure = smtpPort === 465; // Use secure for port 465
+      
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: false, // true for 465, false for other ports
+        port: smtpPort,
+        secure: isSecure, // true for 465, false for other ports
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
         tls: {
           rejectUnauthorized: false
-        }
+        },
+        connectionTimeout: 10000, // 10 seconds
+        greetingTimeout: 10000,
+        socketTimeout: 10000
       });
 
       // Verify connection configuration
