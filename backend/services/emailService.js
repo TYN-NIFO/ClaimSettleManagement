@@ -10,11 +10,17 @@ class EmailService {
   }
 
   initializeTransporter() {
+    // Skip SMTP initialization if SendGrid is configured
+    if (process.env.SENDGRID_API_KEY) {
+      console.log('📧 Skipping SMTP initialization - SendGrid is configured');
+      return;
+    }
+
     try {
       const smtpPort = parseInt(process.env.SMTP_PORT || '587');
       const isSecure = smtpPort === 465; // Use secure for port 465
       
-      console.log('📧 Initializing Email Service with config:', {
+      console.log('📧 Initializing SMTP Email Service with config:', {
         host: process.env.SMTP_HOST,
         port: smtpPort,
         secure: isSecure,
@@ -44,7 +50,7 @@ class EmailService {
       // Verify connection configuration
       this.transporter.verify((error, success) => {
         if (error) {
-          console.error('❌ Email service verification failed:', {
+          console.error('❌ SMTP service verification failed:', {
             error: error.message,
             code: error.code,
             command: error.command,
@@ -52,11 +58,11 @@ class EmailService {
             port: smtpPort
           });
         } else {
-          console.log('✅ Email service is ready to send messages');
+          console.log('✅ SMTP service is ready to send messages');
         }
       });
     } catch (error) {
-      console.error('❌ Failed to initialize email transporter:', error);
+      console.error('❌ Failed to initialize SMTP transporter:', error);
     }
   }
 

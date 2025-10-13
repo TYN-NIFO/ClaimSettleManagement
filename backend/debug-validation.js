@@ -11,6 +11,7 @@ const claimData = {
   "category": "IT & Software"
 };
 
+
 console.log('\n1. Claim Data:');
 console.log('Category:', JSON.stringify(claimData.category));
 console.log('Business Unit:', JSON.stringify(claimData.businessUnit));
