@@ -7,6 +7,7 @@ import multer from 'multer';
 import storageService from '../services/storage.js';
 import RefreshToken from '../models/RefreshToken.js';
 import AuditLog from '../models/AuditLog.js';
+import emailService from '../services/emailService.js';
 
 // Token configuration
 const TOKEN_CONFIG = {
@@ -496,9 +497,13 @@ const forgotPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
+    
+    // Always return the same message regardless of whether user exists
+    // This prevents email enumeration attacks
+    const responseMessage = 'If the email exists, a reset link has been sent';
+    
     if (!user) {
-      // Don't reveal if user exists or not
-      return res.json({ message: 'If the email exists, a reset link has been sent' });
+      return res.json({ message: responseMessage });
     }
 
     // Generate reset token
@@ -509,16 +514,26 @@ const forgotPassword = async (req, res) => {
     user.resetPasswordExpires = resetTokenExpiry;
     await user.save();
 
-    // TODO: Send email with reset link
-    // For now, just return the token (in production, send via email)
-    console.log('Password reset token:', resetToken);
+    // Send password reset email
+    try {
+      await emailService.sendPasswordResetEmail(
+        user.email,
+        resetToken,
+        user.name
+      );
+      console.log('Password reset email sent to:', user.email);
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+      // Don't reveal email sending failure to user for security
+      // Log it for debugging but still return success message
+    }
 
     await createAuditLog(user._id, 'FORGOT_PASSWORD', 'AUTH', { 
       ipAddress: req.ip,
       userAgent: req.get('User-Agent')
     });
 
-    res.json({ message: 'If the email exists, a reset link has been sent' });
+    res.json({ message: responseMessage });
   } catch (error) {
     console.error('Forgot password error:', error);
     res.status(500).json({ error: 'Forgot password failed' });
@@ -534,6 +549,14 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ 
         error: 'Validation failed',
         details: 'Token and new password are required' 
+      });
+    }
+
+    // Validate password length
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: 'Password must be at least 6 characters long' 
       });
     }
 
@@ -555,11 +578,20 @@ const resetPassword = async (req, res) => {
     user.resetPasswordExpires = undefined;
     await user.save();
 
-    // Revoke all refresh tokens for this user
+    // Revoke all refresh tokens for this user (logout from all devices)
     await RefreshToken.updateMany(
       { userId: user._id },
       { isRevoked: true }
     );
+
+    // Send confirmation email
+    try {
+      await emailService.sendPasswordResetConfirmation(user.email, user.name);
+      console.log('Password reset confirmation email sent to:', user.email);
+    } catch (emailError) {
+      console.error('Failed to send confirmation email:', emailError);
+      // Don't fail the request if confirmation email fails
+    }
 
     await createAuditLog(user._id, 'PASSWORD_RESET', 'AUTH', { 
       ipAddress: req.ip,
