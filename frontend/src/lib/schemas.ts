@@ -138,6 +138,7 @@ export const attachmentSchema = z.object({
   size: z.number(),
   mime: z.string(),
   storageKey: z.string(),
+  url: z.string().optional(), // Public S3 URL
   label: z.string()
 });
 

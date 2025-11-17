@@ -24,92 +24,21 @@ export default function ClaimViewPage() {
   const [markPaid, { isLoading: isMarkingPaid }] = useMarkPaidMutation();
   const [deleteClaim] = useDeleteClaimMutation();
 
-  // Helper function to handle authenticated file access with token refresh
-  const handleAuthenticatedFileAccess = async (storageKey: string, fileName: string, isDownload: boolean = false) => {
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-    
+  // Helper function to handle file access via public S3 URL
+  const handleFileAccess = (url: string, fileName: string, isDownload: boolean = false) => {
     try {
-      // Get current token
-      let token = accessToken || authService.getAccessToken();
-      
-      // Check if token is expired and refresh if needed
-      if (token && authService.isTokenExpired(token)) {
-        console.log('Token expired, attempting refresh...');
-        token = await authService.refreshToken();
-        if (!token) {
-          toast.error('Authentication expired. Please log in again.');
-          router.push('/login');
-          return;
-        }
-      }
-
-      if (!token) {
-        toast.error('Authentication required. Please log in.');
-        router.push('/login');
-        return;
-      }
-
-      // Make authenticated request
-      const response = await fetch(`${apiBaseUrl}/claims/files/${storageKey}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        
-        if (isDownload) {
-          // Download file
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        } else {
-          // View file
-          window.open(url, '_blank');
-          setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-        }
-      } else if (response.status === 401) {
-        // Try one more time with token refresh
-        console.log('First attempt failed, trying with fresh token...');
-        const freshToken = await authService.refreshToken();
-        if (freshToken) {
-          const retryResponse = await fetch(`${apiBaseUrl}/claims/files/${storageKey}`, {
-            headers: {
-              'Authorization': `Bearer ${freshToken}`
-            }
-          });
-          
-          if (retryResponse.ok) {
-            const blob = await retryResponse.blob();
-            const url = window.URL.createObjectURL(blob);
-            
-            if (isDownload) {
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = fileName;
-              document.body.appendChild(a);
-              a.click();
-              window.URL.revokeObjectURL(url);
-              document.body.removeChild(a);
-            } else {
-              window.open(url, '_blank');
-              setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-            }
-          } else {
-            throw new Error(`HTTP ${retryResponse.status}: ${retryResponse.statusText}`);
-          }
-        } else {
-          toast.error('Authentication failed. Please log in again.');
-          router.push('/login');
-        }
+      if (isDownload) {
+        // Download file
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // View file in new tab
+        window.open(url, '_blank');
       }
     } catch (error) {
       console.error(`${isDownload ? 'Download' : 'View'} failed:`, error);
@@ -428,13 +357,13 @@ export default function ClaimViewPage() {
                             </div>
                             <div className="mt-3 flex space-x-2">
                               <button
-                                onClick={() => handleAuthenticatedFileAccess(attachment.storageKey, attachment.name)}
+                                onClick={() => handleFileAccess(attachment.url, attachment.name)}
                                 className="flex-1 bg-blue-600 text-white text-xs px-3 py-1 rounded hover:bg-blue-700 transition-colors"
                               >
                                 View
                               </button>
                               <button
-                                onClick={() => handleAuthenticatedFileAccess(attachment.storageKey, attachment.name, true)}
+                                onClick={() => handleFileAccess(attachment.url, attachment.name, true)}
                                 className="flex-1 bg-gray-600 text-white text-xs px-3 py-1 rounded hover:bg-gray-700 transition-colors"
                               >
                                 Download

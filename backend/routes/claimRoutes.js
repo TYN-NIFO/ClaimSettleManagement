@@ -188,7 +188,7 @@ router.post("/", auth, upload.array("files", 50), async (req, res) => {
 
       for (const file of req.files) {
         try {
-          // Store file using storage service
+          // Store file using storage service (returns public URL)
           const result = await storageService.save(file);
           const attachment = {
             fileId: result.fileId,
@@ -196,6 +196,7 @@ router.post("/", auth, upload.array("files", 50), async (req, res) => {
             size: file.size,
             mime: file.mimetype,
             storageKey: result.storageKey,
+            url: result.url, // Public S3 URL
             label: "supporting_doc",
           };
 
@@ -1281,7 +1282,7 @@ router.post("/:id/upload", auth, upload.single("file"), async (req, res) => {
       return res.status(400).json({ error: "File size exceeds limit" });
     }
 
-    // Store file using storage service
+    // Store file using storage service (returns public URL)
     const result = await storageService.save(req.file);
     const fileKey = result.storageKey;
 
@@ -1291,6 +1292,7 @@ router.post("/:id/upload", auth, upload.single("file"), async (req, res) => {
       size: req.file.size,
       mime: req.file.mimetype,
       storageKey: fileKey,
+      url: result.url, // Public S3 URL
       label: "attachment",
     };
 
@@ -1605,52 +1607,9 @@ const canAccessFile = async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/files/:storageKey", auth, canAccessFile, async (req, res) => {
-  let fileStream;
-  try {
-    const { storageKey } = req.params;
-
-    // Get file info and stream
-    const fileInfo = await storageService.getInfo(storageKey);
-    fileStream = await storageService.getStream(storageKey);
-
-    // Set appropriate headers
-    res.setHeader("Content-Type", fileInfo.mime || "application/octet-stream");
-    res.setHeader("Content-Length", fileInfo.size || 0);
-    res.setHeader("Content-Disposition", `inline; filename="${storageKey}"`);
-    res.setHeader("Cache-Control", "private, max-age=3600");
-
-    // Handle stream errors
-    fileStream.on("error", (error) => {
-      console.error("Stream error:", error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Error streaming file" });
-      } else {
-        res.end();
-      }
-    });
-
-    // Handle response close/abort
-    req.on("close", () => {
-      if (fileStream && typeof fileStream.destroy === "function") {
-        fileStream.destroy();
-      }
-    });
-
-    // Pipe the file stream to response
-    fileStream.pipe(res);
-  } catch (error) {
-    console.error("File serve error:", error);
-    if (!res.headersSent) {
-      res.status(404).json({ error: "File not found" });
-    } else {
-      res.end();
-    }
-    // Clean up stream if it exists
-    if (fileStream && typeof fileStream.destroy === "function") {
-      fileStream.destroy();
-    }
-  }
-});
+// File serving endpoint removed - files are now accessed directly via public S3 URLs
+// router.get("/files/:storageKey", auth, canAccessFile, async (req, res) => {
+//   // No longer needed - files are publicly accessible via S3 URLs
+// });
 
 export default router;

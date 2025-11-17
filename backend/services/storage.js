@@ -3,44 +3,58 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Storage service interface with AWS S3 support
+ * Storage service for AWS S3 only (public bucket)
  */
 export class StorageService {
   constructor() {
-    this.uploadDir = path.join(process.cwd(), "uploads");
-    this.useCloudStorage =
-      process.env.AWS_ACCESS_KEY_ID &&
-      process.env.AWS_SECRET_ACCESS_KEY &&
-      process.env.AWS_REGION &&
-      process.env.AWS_ACCESS_KEY_ID.trim() !== "" &&
-      process.env.AWS_SECRET_ACCESS_KEY.trim() !== "" &&
-      process.env.AWS_REGION.trim() !== "";
+    this.s3Client = null;
+    this.bucketName = null;
+    this.region = null;
+    this.initializing = false;
+    this.initialized = false;
+    
+    // Check for AWS credentials - S3 is required
+    const hasAccessKey = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_ACCESS_KEY_ID.trim() !== "";
+    const hasSecretKey = process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_SECRET_ACCESS_KEY.trim() !== "";
+    const hasRegion = process.env.AWS_REGION && process.env.AWS_REGION.trim() !== "";
+    
+    if (!hasAccessKey || !hasSecretKey || !hasRegion) {
+      throw new Error("AWS S3 credentials are required. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION environment variables.");
+    }
 
-    console.log("Storage Service Initialization:", {
-      hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-      hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
-      hasRegion: !!process.env.AWS_REGION,
-      useCloudStorage: this.useCloudStorage,
-      nodeEnv: process.env.NODE_ENV
+    console.log("Storage Service Initialization (S3 Only):", {
+      hasAccessKey,
+      hasSecretKey,
+      hasRegion,
+      nodeEnv: process.env.NODE_ENV,
+      accessKeyPrefix: process.env.AWS_ACCESS_KEY_ID.substring(0, 8) + '...',
+      region: process.env.AWS_REGION,
+      bucketName: process.env.AWS_S3_BUCKET_NAME || 'claim-files'
     });
 
-    if (this.useCloudStorage) {
-      this.initializeS3();
-    } else {
-      console.log("Using local storage - AWS S3 not configured");
-      this.ensureUploadDir();
-    }
+    // Initialize S3 asynchronously
+    this.initializeS3().catch((error) => {
+      console.error("Failed to initialize S3:", error);
+      throw error;
+    });
   }
 
   /**
    * Initialize AWS S3 client
    */
   async initializeS3() {
+    if (this.initializing) {
+      return;
+    }
+    
+    this.initializing = true;
+    
     try {
       const { S3Client } = await import("@aws-sdk/client-s3");
 
+      this.region = process.env.AWS_REGION;
       this.s3Client = new S3Client({
-        region: process.env.AWS_REGION,
+        region: this.region,
         credentials: {
           accessKeyId: process.env.AWS_ACCESS_KEY_ID,
           secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -49,20 +63,16 @@ export class StorageService {
 
       this.bucketName = process.env.AWS_S3_BUCKET_NAME || "claim-files";
 
-      // Ensure bucket exists (or create if needed)
+      // Ensure bucket exists
       await this.ensureBucketExists();
 
-      console.log(
-        "AWS S3 initialized for bucket:",
-        this.bucketName
-      );
+      this.initialized = true;
+      console.log("✅ AWS S3 initialized successfully for bucket:", this.bucketName);
     } catch (error) {
-      console.error(
-        "Failed to initialize AWS S3, falling back to local storage:",
-        error
-      );
-      this.useCloudStorage = false;
-      this.ensureUploadDir();
+      console.error("❌ Failed to initialize AWS S3:", error.message || error);
+      throw error;
+    } finally {
+      this.initializing = false;
     }
   }
 
@@ -95,46 +105,67 @@ export class StorageService {
   }
 
   /**
-   * Ensure upload directory exists (for local storage)
+   * Get public URL for a file in S3
+   * @param {string} storageKey - The storage key
+   * @returns {string} Public URL
    */
-  ensureUploadDir() {
-    try {
-      if (!fs.existsSync(this.uploadDir)) {
-        fs.mkdirSync(this.uploadDir, { recursive: true });
-        console.log("Upload directory created:", this.uploadDir);
-      } else {
-        console.log("Upload directory exists:", this.uploadDir);
-      }
-    } catch (error) {
-      console.error("Error creating upload directory:", error);
-      throw error;
+  getPublicUrl(storageKey) {
+    if (!this.bucketName || !this.region) {
+      throw new Error("S3 not initialized");
     }
+    return `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${storageKey}`;
   }
 
   /**
-   * Save a file and return storage key
+   * Ensure S3 is initialized before use
+   */
+  async ensureS3Initialized() {
+    if (this.s3Client) {
+      return true;
+    }
+    
+    if (this.initializing) {
+      // Wait for initialization to complete
+      while (this.initializing && !this.s3Client) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return !!this.s3Client;
+    }
+    
+    // Try to initialize now
+    await this.initializeS3();
+    return !!this.s3Client;
+  }
+
+  /**
+   * Save a file to S3 and return storage info with public URL
    * @param {Express.Multer.File} file - The uploaded file
-   * @returns {Promise<{storageKey: string, fileId: string}>}
+   * @returns {Promise<{storageKey: string, fileId: string, url: string}>}
    */
   async save(file) {
     try {
-      console.log("Storage service saving file:", {
+      console.log("Storage service saving file to S3:", {
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size,
         bufferLength: file.buffer ? file.buffer.length : 0,
-        useCloudStorage: this.useCloudStorage,
       });
 
       const fileId = uuidv4();
       const extension = path.extname(file.originalname);
       const storageKey = `${fileId}${extension}`;
 
-      if (this.useCloudStorage && this.s3Client) {
-        return await this.saveToS3(file, storageKey, fileId);
-      } else {
-        return await this.saveToLocal(file, storageKey, fileId);
+      // Ensure S3 is initialized
+      await this.ensureS3Initialized();
+      
+      if (!this.s3Client) {
+        throw new Error("S3 client not initialized");
       }
+
+      console.log("📤 Uploading to S3...");
+      const result = await this.saveToS3(file, storageKey, fileId);
+      console.log("✅ Upload complete, returning S3 result with public URL");
+      return result;
     } catch (error) {
       console.error("Storage service save error:", error);
       throw error;
@@ -142,7 +173,7 @@ export class StorageService {
   }
 
   /**
-   * Save file to AWS S3
+   * Save file to AWS S3 with public access
    */
   async saveToS3(file, storageKey, fileId) {
     const { PutObjectCommand } = await import("@aws-sdk/client-s3");
@@ -160,7 +191,15 @@ export class StorageService {
 
     await this.s3Client.send(command);
 
-    console.log("File saved to AWS S3:", storageKey);
+    const publicUrl = this.getPublicUrl(storageKey);
+
+    console.log("✅ File saved to AWS S3:", {
+      storageKey,
+      bucket: this.bucketName,
+      size: file.size,
+      mime: file.mimetype,
+      url: publicUrl
+    });
 
     return {
       storageKey,
@@ -168,45 +207,20 @@ export class StorageService {
       name: file.originalname,
       size: file.size,
       mime: file.mimetype,
+      url: publicUrl,
     };
   }
 
-  /**
-   * Save file to local storage
-   */
-  async saveToLocal(file, storageKey, fileId) {
-    const filePath = path.join(this.uploadDir, storageKey);
 
-    return new Promise((resolve, reject) => {
-      fs.writeFile(filePath, file.buffer, (err) => {
-        if (err) {
-          console.error("Error writing file:", err);
-          reject(err);
-        } else {
-          console.log("File saved locally:", filePath);
-          resolve({
-            storageKey,
-            fileId,
-            name: file.originalname,
-            size: file.size,
-            mime: file.mimetype,
-          });
-        }
-      });
-    });
-  }
 
   /**
-   * Remove a file by storage key
+   * Remove a file by storage key from S3
    * @param {string} storageKey - The storage key to remove
    * @returns {Promise<void>}
    */
   async remove(storageKey) {
-    if (this.useCloudStorage && this.s3Client) {
-      return await this.removeFromS3(storageKey);
-    } else {
-      return await this.removeFromLocal(storageKey);
-    }
+    await this.ensureS3Initialized();
+    return await this.removeFromS3(storageKey);
   }
 
   /**
@@ -224,150 +238,19 @@ export class StorageService {
     console.log("File removed from AWS S3:", storageKey);
   }
 
-  /**
-   * Remove file from local storage
-   */
-  async removeFromLocal(storageKey) {
-    const filePath = path.join(this.uploadDir, storageKey);
 
-    return new Promise((resolve, reject) => {
-      fs.unlink(filePath, (err) => {
-        if (err && err.code !== "ENOENT") {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
-  }
 
-  /**
-   * Get file stream for reading
-   * @param {string} storageKey - The storage key
-   * @returns {Promise<fs.ReadStream|ReadableStream>}
-   */
-  async getStream(storageKey) {
-    if (this.useCloudStorage && this.s3Client) {
-      return await this.getStreamFromS3(storageKey);
-    } else {
-      return await this.getStreamFromLocal(storageKey);
-    }
-  }
 
-  /**
-   * Get file stream from AWS S3
-   */
-  async getStreamFromS3(storageKey) {
-    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
 
-    const command = new GetObjectCommand({
-      Bucket: this.bucketName,
-      Key: storageKey,
-    });
 
-    const response = await this.s3Client.send(command);
-    
-    // AWS S3 SDK v3 returns response.Body as a Readable stream
-    // Ensure it's properly handled for Express piping
-    if (!response.Body) {
-      throw new Error("No body in S3 response");
-    }
-    
-    return response.Body;
-  }
 
-  /**
-   * Get file stream from local storage
-   */
-  async getStreamFromLocal(storageKey) {
-    const filePath = path.join(this.uploadDir, storageKey);
 
-    return new Promise((resolve, reject) => {
-      fs.access(filePath, fs.constants.F_OK, (err) => {
-        if (err) {
-          reject(new Error("File not found"));
-        } else {
-          resolve(fs.createReadStream(filePath));
-        }
-      });
-    });
-  }
 
-  /**
-   * Get file info
-   * @param {string} storageKey - The storage key
-   * @returns {Promise<{size: number, mime: string}>}
-   */
-  async getInfo(storageKey) {
-    if (this.useCloudStorage && this.s3Client) {
-      return await this.getInfoFromS3(storageKey);
-    } else {
-      return await this.getInfoFromLocal(storageKey);
-    }
-  }
 
-  /**
-   * Get file info from AWS S3
-   */
-  async getInfoFromS3(storageKey) {
-    const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
 
-    const command = new HeadObjectCommand({
-      Bucket: this.bucketName,
-      Key: storageKey,
-    });
 
-    const response = await this.s3Client.send(command);
 
-    return {
-      size: response.ContentLength || 0,
-      mime: response.ContentType || this.getMimeType(path.extname(storageKey)),
-    };
-  }
 
-  /**
-   * Get file info from local storage
-   */
-  async getInfoFromLocal(storageKey) {
-    const filePath = path.join(this.uploadDir, storageKey);
-
-    return new Promise((resolve, reject) => {
-      fs.stat(filePath, (err, stats) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({
-            size: stats.size,
-            mime: this.getMimeType(path.extname(storageKey)),
-          });
-        }
-      });
-    });
-  }
-
-  /**
-   * Get MIME type from extension
-   * @param {string} extension - File extension
-   * @returns {string} MIME type
-   */
-  getMimeType(extension) {
-    const mimeTypes = {
-      ".pdf": "application/pdf",
-      ".jpg": "image/jpeg",
-      ".jpeg": "image/jpeg",
-      ".png": "image/png",
-      ".gif": "image/gif",
-      ".doc": "application/msword",
-      ".docx":
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      ".xls": "application/vnd.ms-excel",
-      ".xlsx":
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ".txt": "text/plain",
-    };
-
-    return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
-  }
 }
 
 let storageServiceInstance = null;

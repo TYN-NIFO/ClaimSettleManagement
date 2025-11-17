@@ -6,6 +6,7 @@ const AttachmentSchema = new mongoose.Schema({
   size: Number,
   mime: String,
   storageKey: String,
+  url: String, // Public S3 URL
   label: String // for required document matching
 }, { _id: false });
 
