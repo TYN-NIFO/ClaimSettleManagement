@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import multer from 'multer';
 import storageService from '../services/storage.js';
@@ -433,22 +434,37 @@ const checkUsername = async (req, res) => {
   try {
     const { email } = req.body;
     
-    if (!email || typeof email !== 'string') {
+    if (!email || typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({ 
         error: 'Validation failed',
         details: 'Valid email is required' 
       });
     }
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    // Ensure database connection is ready
+    if (mongoose.connection.readyState !== 1) {
+      console.error('Database not connected, readyState:', mongoose.connection.readyState);
+      return res.status(503).json({ 
+        error: 'Service temporarily unavailable',
+        details: 'Database connection not ready' 
+      });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     
-    res.json({
+    return res.json({
       available: !existingUser,
       message: existingUser ? 'Email already taken' : 'Email available'
     });
   } catch (error) {
     console.error('Username check error:', error);
-    res.status(500).json({ error: 'Username check failed' });
+    // Ensure response hasn't been sent
+    if (!res.headersSent) {
+      return res.status(500).json({ 
+        error: 'Username check failed',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
   }
 };
 

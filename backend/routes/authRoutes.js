@@ -447,6 +447,8 @@ router.post("/avatar/", auth, uploadAvatar);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+// Support both with and without trailing slash
+router.post("/check-username", checkUsername);
 router.post("/check-username/", checkUsername);
 
 // Password reset
