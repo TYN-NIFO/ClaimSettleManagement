@@ -1,15 +1,23 @@
-import express from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
-import { auth } from '../middleware/auth.js';
-import { rbac, canAccessClaim } from '../middleware/rbac.js';
-import Claim from '../models/Claim.js';
-import User from '../models/User.js';
-import { validateAgainstPolicy, computeClaimTotals, getCurrentPolicy } from '../services/policyValidation.js';
-import storageService from '../services/storage.js';
-import { createAuditLog } from '../controllers/authController.js';
-import { createClaim, financeApprove, executiveApprove, markAsPaid } from '../controllers/claimController.js';
+import express from "express";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { auth } from "../middleware/auth.js";
+import { rbac, canAccessClaim } from "../middleware/rbac.js";
+import Claim from "../models/Claim.js";
+import {
+  validateAgainstPolicy,
+  computeClaimTotals,
+  getCurrentPolicy,
+} from "../services/policyValidation.js";
+import storageService from "../services/storage.js";
+import { createAuditLog } from "../controllers/authController.js";
+import {
+  createClaim,
+  financeApprove,
+  executiveApprove,
+  markAsPaid,
+} from "../controllers/claimController.js";
 
 const router = express.Router();
 
@@ -19,29 +27,29 @@ const upload = multer({
   limits: {
     fileSize: 4 * 1024 * 1024, // 4MB limit for Vercel free tier compatibility
     files: 10, // Max 10 files per request
-    fieldSize: 4 * 1024 * 1024 // 4MB field size limit
+    fieldSize: 4 * 1024 * 1024, // 4MB field size limit
   },
   fileFilter: (req, file, cb) => {
-    console.log('Multer processing file:', {
+    console.log("Multer processing file:", {
       originalname: file.originalname,
       mimetype: file.mimetype,
-      size: file.size
+      size: file.size,
     });
-    
+
     // Accept PDF files and image files
     const allowedMimeTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/png'
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
     ];
-    
+
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF, JPEG, JPG, and PNG files are allowed'), false);
+      cb(new Error("Only PDF, JPEG, JPG, and PNG files are allowed"), false);
     }
-  }
+  },
 });
 
 /**
@@ -109,52 +117,54 @@ const upload = multer({
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', auth, upload.array('files', 50), async (req, res) => {
+router.post("/", auth, upload.array("files", 50), async (req, res) => {
   try {
-    const claimData = JSON.parse(req.body.claimData || '{}');
-    const fileMapping = JSON.parse(req.body.fileMapping || '{}');
+    const claimData = JSON.parse(req.body.claimData || "{}");
+    const fileMapping = JSON.parse(req.body.fileMapping || "{}");
     claimData.employeeId = req.user._id;
     claimData.createdBy = req.user._id;
 
-    console.log('Claim creation request:', {
+    console.log("Claim creation request:", {
       body: req.body,
       processedData: claimData,
       user: req.user._id,
-      userObject: req.user
+      userObject: req.user,
     });
 
     // Get current policy
     const policy = await getCurrentPolicy();
     if (!policy) {
-      return res.status(500).json({ error: 'System policy not configured' });
+      return res.status(500).json({ error: "System policy not configured" });
     }
 
-    console.log('Policy loaded:', {
+    console.log("Policy loaded:", {
       categories: policy.claimCategories,
       policyId: policy._id,
       categoriesLength: policy.claimCategories?.length,
       firstCategory: policy.claimCategories?.[0],
-      lastCategory: policy.claimCategories?.[policy.claimCategories?.length - 1]
+      lastCategory:
+        policy.claimCategories?.[policy.claimCategories?.length - 1],
     });
 
     // Validate claim against policy
     const validation = await validateAgainstPolicy(claimData, policy);
-    const hardErrors = validation.violations.filter(v => v.level === 'error');
-    
-    console.log('Validation result:', {
+    const hardErrors = validation.violations.filter((v) => v.level === "error");
+
+    console.log("Validation result:", {
       violations: validation.violations,
       hardErrors: hardErrors,
       hardErrorsCount: hardErrors.length,
       claimCategory: claimData.category,
-      claimBusinessUnit: claimData.businessUnit
+      claimBusinessUnit: claimData.businessUnit,
     });
-    
+
     if (hardErrors.length > 0) {
-      console.log('Validation failed with errors:', hardErrors);
+      console.log("Validation failed with errors:", hardErrors);
       return res.status(400).json({
-        error: 'Validation failed',
+        error: "Validation failed",
         violations: hardErrors,
-        message: 'Claim has validation errors that must be fixed before submission'
+        message:
+          "Claim has validation errors that must be fixed before submission",
       });
     }
 
@@ -164,18 +174,18 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
     claimData.netPayable = totals.netPayable;
     // Let the controller handle the status based on user role
 
-    console.log('Final claim data before creation:', {
+    console.log("Final claim data before creation:", {
       employeeId: claimData.employeeId,
       createdBy: claimData.createdBy,
       category: claimData.category,
       businessUnit: claimData.businessUnit,
-      userId: req.user._id
+      userId: req.user._id,
     });
 
     // Process uploaded files and attach to line items
     if (req.files && req.files.length > 0) {
-      console.log('Processing uploaded files:', req.files.length);
-      
+      console.log("Processing uploaded files:", req.files.length);
+
       for (const file of req.files) {
         try {
           // Store file using storage service
@@ -186,7 +196,7 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
             size: file.size,
             mime: file.mimetype,
             storageKey: result.storageKey,
-            label: 'supporting_doc'
+            label: "supporting_doc",
           };
 
           // Find which line item this file belongs to based on file mapping
@@ -198,7 +208,7 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
             claimData.lineItems[lineItemIndex].attachments.push(attachment);
           }
         } catch (fileError) {
-          console.error('Error processing file:', file.originalname, fileError);
+          console.error("Error processing file:", file.originalname, fileError);
           // Continue processing other files
         }
       }
@@ -208,9 +218,11 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
     req.body = claimData;
     return createClaim(req, res);
   } catch (error) {
-    console.error('Create claim error:', error);
-    console.error('Error in claim creation route:', error);
-    res.status(500).json({ error: 'Failed to create claim', details: error.message });
+    console.error("Create claim error:", error);
+    console.error("Error in claim creation route:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to create claim", details: error.message });
   }
 });
 
@@ -290,66 +302,81 @@ router.post('/', auth, upload.array('files', 50), async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', auth, async (req, res) => {
+router.get("/", auth, async (req, res) => {
   try {
     const { status, category, page = 1, limit = 10 } = req.query;
     const user = req.user;
     const filter = {};
 
-    console.log('\n=== CLAIMS API DEBUG ===');
-    console.log('User:', { id: user._id, name: user.name, email: user.email, role: user.role });
-    console.log('Query params:', { status, category, page, limit });
+    console.log("\n=== CLAIMS API DEBUG ===");
+    console.log("User:", {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+    console.log("Query params:", { status, category, page, limit });
 
     // Apply status and category filters
     if (status) filter.status = status;
     if (category) filter.category = category;
 
     // Role-based filtering - Check executive role FIRST before other role checks
-    if (user.role === 'executive' || user.role === 'admin') {
+    if (user.role === "executive" || user.role === "admin") {
       // Executives and admins see all claims for final approval
       // No filter applied - they can see everything
       console.log(`${user.role} - no filter applied`);
-    } else if (user.role === 'employee') {
+    } else if (user.role === "employee") {
       filter.employeeId = user._id;
-      console.log('Employee filter applied:', filter);
-    } else if (user.role === 'finance_manager') {
+      console.log("Employee filter applied:", filter);
+    } else if (user.role === "finance_manager") {
       // Finance managers see all claims - they need to see their own claims and all claims that need their attention
       // No filter applied - they can see everything
-      console.log('Finance manager - no filter applied');
+      console.log("Finance manager - no filter applied");
     }
     // Admin can see all claims (no filter applied)
 
-    console.log('Final filter:', JSON.stringify(filter, null, 2));
+    console.log("Final filter:", JSON.stringify(filter, null, 2));
 
     const claims = await Claim.find(filter)
-      .populate('employeeId', 'name email')
-      .populate('financeApproval.approvedBy', 'name email')
-      .populate('executiveApproval.approvedBy', 'name email')
-      .populate('payment.paidBy', 'name email')
+      .populate("employeeId", "name email")
+      .populate("financeApproval.approvedBy", "name email")
+      .populate("executiveApproval.approvedBy", "name email")
+      .populate("payment.paidBy", "name email")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
       .skip((page - 1) * limit);
 
-    console.log('Claims found:', claims.length);
+    console.log("Claims found:", claims.length);
     claims.forEach((claim, index) => {
-      console.log(`${index + 1}. Claim ID: ${claim._id}, Employee: ${claim.employeeId?.name} (${claim.employeeId?.email}), Status: ${claim.status}`);
+      console.log(
+        `${index + 1}. Claim ID: ${claim._id}, Employee: ${
+          claim.employeeId?.name
+        } (${claim.employeeId?.email}), Status: ${claim.status}`
+      );
     });
 
     const count = await Claim.countDocuments(filter);
-    console.log('Total count with filter:', count);
+    console.log("Total count with filter:", count);
 
     res.json({
       claims,
       total: count,
       page: parseInt(page),
       limit: parseInt(limit),
-      totalPages: Math.ceil(count / limit)
+      totalPages: Math.ceil(count / limit),
     });
   } catch (error) {
-    console.error('Get claims error:', error);
-    res.status(500).json({ error: 'Failed to fetch claims' });
+    console.error("Get claims error:", error);
+    res.status(500).json({ error: "Failed to fetch claims" });
   }
 });
+
+// For excel download
+
+
+
+//
 
 /**
  * @swagger
@@ -405,15 +432,14 @@ router.get('/', auth, async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/stats', auth, async (req, res) => {
+router.get("/stats", auth, async (req, res) => {
   try {
     const user = req.user;
     const filter = {};
 
     // Role-based filtering
-    if (user.role === 'employee') {
+    if (user.role === "employee") {
       filter.employeeId = user._id;
-
     }
     // Finance managers and admins can see all claims (no filter applied)
 
@@ -421,27 +447,27 @@ router.get('/stats', auth, async (req, res) => {
       { $match: filter },
       {
         $group: {
-          _id: '$status',
+          _id: "$status",
           count: { $sum: 1 },
-          totalAmount: { $sum: '$grandTotal' }
-        }
-      }
+          totalAmount: { $sum: "$grandTotal" },
+        },
+      },
     ]);
 
     const totalClaims = await Claim.countDocuments(filter);
     const totalAmount = await Claim.aggregate([
       { $match: filter },
-      { $group: { _id: null, total: { $sum: '$grandTotal' } } }
+      { $group: { _id: null, total: { $sum: "$grandTotal" } } },
     ]);
 
     res.json({
       statusStats: stats,
       totalClaims,
-      totalAmount: totalAmount[0]?.total || 0
+      totalAmount: totalAmount[0]?.total || 0,
     });
   } catch (error) {
-    console.error('Get stats error:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    console.error("Get stats error:", error);
+    res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
 
@@ -500,25 +526,30 @@ router.get('/stats', auth, async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', auth, rbac(['employee', 'finance_manager', 'executive', 'admin']), async (req, res) => {
-  try {
-    const claim = await Claim.findById(req.params.id)
-      .populate('employeeId', 'name email')
+router.get(
+  "/:id",
+  auth,
+  rbac(["employee", "finance_manager", "executive", "admin"]),
+  async (req, res) => {
+    try {
+      const claim = await Claim.findById(req.params.id)
+        .populate("employeeId", "name email")
 
-      .populate('financeApproval.approvedBy', 'name email')
-      .populate('executiveApproval.approvedBy', 'name email')
-      .populate('payment.paidBy', 'name email');
+        .populate("financeApproval.approvedBy", "name email")
+        .populate("executiveApproval.approvedBy", "name email")
+        .populate("payment.paidBy", "name email");
 
-    if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+      if (!claim) {
+        return res.status(404).json({ error: "Claim not found" });
+      }
+
+      res.json(claim);
+    } catch (error) {
+      console.error("Get claim error:", error);
+      res.status(500).json({ error: "Failed to fetch claim" });
     }
-
-    res.json(claim);
-  } catch (error) {
-    console.error('Get claim error:', error);
-    res.status(500).json({ error: 'Failed to fetch claim' });
   }
-});
+);
 
 /**
  * @swagger
@@ -603,179 +634,207 @@ router.get('/:id', auth, rbac(['employee', 'finance_manager', 'executive', 'admi
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req, res) => {
-  try {
-    const claimId = req.params.id;
-    const user = req.user;
+router.patch(
+  "/:id",
+  auth,
+  canAccessClaim,
+  upload.array("files", 50),
+  async (req, res) => {
+    try {
+      const claimId = req.params.id;
+      const user = req.user;
 
-    // Parse the request data
-    let updateData;
-    let fileMapping = {};
-    
-    if (req.files && req.files.length > 0) {
-      // Handle multipart/form-data (with files)
-      updateData = JSON.parse(req.body.claimData || '{}');
-      fileMapping = JSON.parse(req.body.fileMapping || '{}');
-    } else if (req.is('application/json')) {
-      // Handle JSON body
-      updateData = req.body;
-    } else if (req.is('application/x-www-form-urlencoded') || req.is('multipart/form-data')) {
-      // Handle form data without files
-      updateData = req.body;
-      if (typeof updateData.claimData === 'string') {
-        updateData = JSON.parse(updateData.claimData);
+      // Parse the request data
+      let updateData;
+      let fileMapping = {};
+
+      if (req.files && req.files.length > 0) {
+        // Handle multipart/form-data (with files)
+        updateData = JSON.parse(req.body.claimData || "{}");
+        fileMapping = JSON.parse(req.body.fileMapping || "{}");
+      } else if (req.is("application/json")) {
+        // Handle JSON body
+        updateData = req.body;
+      } else if (
+        req.is("application/x-www-form-urlencoded") ||
+        req.is("multipart/form-data")
+      ) {
+        // Handle form data without files
+        updateData = req.body;
+        if (typeof updateData.claimData === "string") {
+          updateData = JSON.parse(updateData.claimData);
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid content type" });
       }
-    } else {
-      return res.status(400).json({ error: 'Invalid content type' });
-    }
 
-    console.log('Update data received:', {
-      updateData,
-      filesCount: req.files?.length || 0,
-      fileMapping
-    });
-
-    // Ensure required fields are present
-    if (!updateData || Object.keys(updateData).length === 0) {
-      return res.status(400).json({ error: 'No update data provided' });
-    }
-
-    // Find the existing claim (available from canAccessClaim, fallback to DB)
-    const existingClaim = req.claim || await Claim.findById(claimId);
-    if (!existingClaim) {
-      return res.status(404).json({ error: 'Claim not found' });
-    }
-
-    // Check permissions - allow updates if:
-    // - Admin
-    // - Finance manager or Executive (full override)
-    // - Owner before finance approval (submitted/rejected)
-    const isExecutive = user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
-    const canEdit = 
-      user.role === 'admin' ||
-      user.role === 'finance_manager' ||
-      isExecutive ||
-      (existingClaim.employeeId.toString() === user._id.toString() && 
-       ['submitted', 'rejected'].includes(existingClaim.status));
-
-    if (!canEdit) {
-      return res.status(403).json({ 
-        error: 'Cannot edit claim in current status or insufficient permissions' 
+      console.log("Update data received:", {
+        updateData,
+        filesCount: req.files?.length || 0,
+        fileMapping,
       });
-    }
 
-    // Get current policy for validation
-    const policy = await getCurrentPolicy();
-    if (!policy) {
-      return res.status(500).json({ error: 'System policy not configured' });
-    }
+      // Ensure required fields are present
+      if (!updateData || Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "No update data provided" });
+      }
 
-    // Validate updated claim against policy
-    const validation = await validateAgainstPolicy(updateData, policy);
-    const hardErrors = validation.violations.filter(v => v.level === 'error');
-    
-    if (hardErrors.length > 0) {
-      return res.status(400).json({
-        error: 'Validation failed',
-        violations: hardErrors,
-        message: 'Claim has validation errors that must be fixed before submission'
-      });
-    }
+      // Find the existing claim (available from canAccessClaim, fallback to DB)
+      const existingClaim = req.claim || (await Claim.findById(claimId));
+      if (!existingClaim) {
+        return res.status(404).json({ error: "Claim not found" });
+      }
 
-    // Compute new totals
-    const totals = await computeClaimTotals(updateData, policy);
-    updateData.grandTotal = totals.grandTotal;
-    updateData.netPayable = totals.netPayable;
+      // Check permissions - allow updates if:
+      // - Admin
+      // - Finance manager or Executive (full override)
+      // - Owner before finance approval (submitted/rejected)
+      const isExecutive =
+        user.role === "executive" ||
+        user.email === "velan@theyellow.network" ||
+        user.email === "gg@theyellownetwork.com";
+      const canEdit =
+        user.role === "admin" ||
+        user.role === "finance_manager" ||
+        isExecutive ||
+        (existingClaim.employeeId.toString() === user._id.toString() &&
+          ["submitted", "rejected"].includes(existingClaim.status));
 
-    // Process uploaded files and attach to line items
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        try {
-          // Store file using storage service
-          const result = await storageService.save(file);
-          const attachment = {
-            fileId: result.fileId,
-            name: file.originalname,
-            size: file.size,
-            mime: file.mimetype,
-            storageKey: result.storageKey,
-            label: 'supporting_doc'
-          };
+      if (!canEdit) {
+        return res.status(403).json({
+          error:
+            "Cannot edit claim in current status or insufficient permissions",
+        });
+      }
 
-          // Find which line item this file belongs to based on file mapping
-          const lineItemIndex = fileMapping[file.originalname] || 0;
-          
-          // Initialize lineItems array if it doesn't exist
-          if (!updateData.lineItems) {
-            updateData.lineItems = [];
+      // Get current policy for validation
+      const policy = await getCurrentPolicy();
+      if (!policy) {
+        return res.status(500).json({ error: "System policy not configured" });
+      }
+
+      // Validate updated claim against policy
+      const validation = await validateAgainstPolicy(updateData, policy);
+      const hardErrors = validation.violations.filter(
+        (v) => v.level === "error"
+      );
+
+      if (hardErrors.length > 0) {
+        return res.status(400).json({
+          error: "Validation failed",
+          violations: hardErrors,
+          message:
+            "Claim has validation errors that must be fixed before submission",
+        });
+      }
+
+      // Compute new totals
+      const totals = await computeClaimTotals(updateData, policy);
+      updateData.grandTotal = totals.grandTotal;
+      updateData.netPayable = totals.netPayable;
+
+      // Process uploaded files and attach to line items
+      if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+          try {
+            // Store file using storage service
+            const result = await storageService.save(file);
+            const attachment = {
+              fileId: result.fileId,
+              name: file.originalname,
+              size: file.size,
+              mime: file.mimetype,
+              storageKey: result.storageKey,
+              label: "supporting_doc",
+            };
+
+            // Find which line item this file belongs to based on file mapping
+            const lineItemIndex = fileMapping[file.originalname] || 0;
+
+            // Initialize lineItems array if it doesn't exist
+            if (!updateData.lineItems) {
+              updateData.lineItems = [];
+            }
+
+            // Ensure the line item exists
+            while (updateData.lineItems.length <= lineItemIndex) {
+              updateData.lineItems.push({ attachments: [] });
+            }
+
+            // Initialize attachments array if it doesn't exist
+            if (!updateData.lineItems[lineItemIndex].attachments) {
+              updateData.lineItems[lineItemIndex].attachments = [];
+            }
+
+            // Add the new attachment
+            updateData.lineItems[lineItemIndex].attachments.push(attachment);
+            console.log(
+              `Added attachment for line item ${lineItemIndex}: ${file.originalname}`
+            );
+          } catch (fileError) {
+            console.error(
+              "Error processing file during update:",
+              file.originalname,
+              fileError
+            );
+            // Continue processing other files
           }
-          
-          // Ensure the line item exists
-          while (updateData.lineItems.length <= lineItemIndex) {
-            updateData.lineItems.push({ attachments: [] });
-          }
-          
-          // Initialize attachments array if it doesn't exist
-          if (!updateData.lineItems[lineItemIndex].attachments) {
-            updateData.lineItems[lineItemIndex].attachments = [];
-          }
-          
-          // Add the new attachment
-          updateData.lineItems[lineItemIndex].attachments.push(attachment);
-          console.log(`Added attachment for line item ${lineItemIndex}: ${file.originalname}`);
-        } catch (fileError) {
-          console.error('Error processing file during update:', file.originalname, fileError);
-          // Continue processing other files
         }
       }
-    }
 
-    // existingClaim is already available from canAccessClaim middleware
+      // existingClaim is already available from canAccessClaim middleware
 
-    // If updating status, handle special cases
-    if (updateData.status) {
-      // If claim was rejected and is being resubmitted
-      if (existingClaim.status === 'rejected' && updateData.status === 'submitted') {
-        updateData.financeApproval = { status: 'pending' };
-        updateData.executiveApproval = { status: 'pending' };
+      // If updating status, handle special cases
+      if (updateData.status) {
+        // If claim was rejected and is being resubmitted
+        if (
+          existingClaim.status === "rejected" &&
+          updateData.status === "submitted"
+        ) {
+          updateData.financeApproval = { status: "pending" };
+          updateData.executiveApproval = { status: "pending" };
+        }
+
+        // If finance manager is updating status to finance_approved
+        if (
+          user.email === "finance@theyellow.network" &&
+          updateData.status === "finance_approved"
+        ) {
+          updateData.financeApproval = {
+            status: "approved",
+            approvedBy: user._id,
+            approvedAt: new Date(),
+            notes: "Approved by finance manager",
+          };
+        }
       }
-      
-      // If finance manager is updating status to finance_approved
-      if (user.email === 'finance@theyellow.network' && updateData.status === 'finance_approved') {
-        updateData.financeApproval = {
-          status: 'approved',
-          approvedBy: user._id,
-          approvedAt: new Date(),
-          notes: 'Approved by finance manager'
-        };
+
+      // Update the claim
+      const updatedClaim = await Claim.findByIdAndUpdate(
+        claimId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      if (!updatedClaim) {
+        return res.status(404).json({ error: "Failed to update claim" });
       }
+
+      // Create audit log
+      await createAuditLog(user._id, "UPDATE_CLAIM", "CLAIM", {
+        claimId: updatedClaim._id,
+        changes: Object.keys(updateData),
+        filesUploaded: req.files ? req.files.length : 0,
+        statusChanged: existingClaim.status !== updatedClaim.status,
+      });
+
+      res.json(updatedClaim);
+    } catch (error) {
+      console.error("Update claim error:", error);
+      res.status(500).json({ error: "Failed to update claim" });
     }
-
-    // Update the claim
-    const updatedClaim = await Claim.findByIdAndUpdate(
-      claimId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedClaim) {
-      return res.status(404).json({ error: 'Failed to update claim' });
-    }
-
-    // Create audit log
-    await createAuditLog(user._id, 'UPDATE_CLAIM', 'CLAIM', {
-      claimId: updatedClaim._id,
-      changes: Object.keys(updateData),
-      filesUploaded: req.files ? req.files.length : 0,
-      statusChanged: existingClaim.status !== updatedClaim.status
-    });
-
-    res.json(updatedClaim);
-  } catch (error) {
-    console.error('Update claim error:', error);
-    res.status(500).json({ error: 'Failed to update claim' });
   }
-});
+);
 
 /**
  * @swagger
@@ -863,7 +922,6 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 
-
 /**
  * @swagger
  * /claims/{id}/finance-approve:
@@ -949,20 +1007,31 @@ router.patch('/:id', auth, canAccessClaim, upload.array('files', 50), async (req
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessClaim, async (req, res) => {
-  try {
-    // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
-    if (!req.claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+router.post(
+  "/:id/finance-approve",
+  auth,
+  rbac(["finance_manager"]),
+  canAccessClaim,
+  async (req, res) => {
+    try {
+      // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
+      if (!req.claim) {
+        return res.status(404).json({ error: "Claim not found" });
+      }
+
+      // Call the controller function
+      await financeApprove(req, res);
+    } catch (error) {
+      console.error("Finance approve claim error:", error);
+      res
+        .status(500)
+        .json({
+          error: "Failed to approve claim",
+          details: error?.message || "Unknown error",
+        });
     }
-    
-    // Call the controller function
-    await financeApprove(req, res);
-  } catch (error) {
-    console.error('Finance approve claim error:', error);
-    res.status(500).json({ error: 'Failed to approve claim', details: error?.message || 'Unknown error' });
   }
-});
+);
 
 /**
  * @swagger
@@ -1049,20 +1118,30 @@ router.post('/:id/finance-approve', auth, rbac(['finance_manager']), canAccessCl
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/executive-approve', auth, canAccessClaim, async (req, res) => {
-  try {
-    // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
-    if (!req.claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+router.post(
+  "/:id/executive-approve",
+  auth,
+  canAccessClaim,
+  async (req, res) => {
+    try {
+      // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
+      if (!req.claim) {
+        return res.status(404).json({ error: "Claim not found" });
+      }
+
+      // Call the controller function
+      await executiveApprove(req, res);
+    } catch (error) {
+      console.error("Executive approve claim error:", error);
+      res
+        .status(500)
+        .json({
+          error: "Failed to approve claim",
+          details: error?.message || "Unknown error",
+        });
     }
-    
-    // Call the controller function
-    await executiveApprove(req, res);
-  } catch (error) {
-    console.error('Executive approve claim error:', error);
-    res.status(500).json({ error: 'Failed to approve claim', details: error?.message || 'Unknown error' });
   }
-});
+);
 
 /**
  * @swagger
@@ -1143,53 +1222,63 @@ router.post('/:id/executive-approve', auth, canAccessClaim, async (req, res) => 
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/mark-paid', auth, rbac(['finance_manager', 'admin']), async (req, res) => {
-  try {
-    // Set the claim in req object for the controller
-    req.claim = await Claim.findById(req.params.id);
-    if (!req.claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+router.post(
+  "/:id/mark-paid",
+  auth,
+  rbac(["finance_manager", "admin"]),
+  async (req, res) => {
+    try {
+      // Set the claim in req object for the controller
+      req.claim = await Claim.findById(req.params.id);
+      if (!req.claim) {
+        return res.status(404).json({ error: "Claim not found" });
+      }
+
+      // Call the controller function
+      await markAsPaid(req, res);
+    } catch (error) {
+      console.error("Mark paid error:", error);
+      res.status(500).json({ error: "Failed to mark claim as paid" });
     }
-    
-    // Call the controller function
-    await markAsPaid(req, res);
-  } catch (error) {
-    console.error('Mark paid error:', error);
-    res.status(500).json({ error: 'Failed to mark claim as paid' });
   }
-});
+);
 
 /**
  * POST /api/claims/:id/upload
  * Upload attachment to claim
  */
-router.post('/:id/upload', auth, upload.single('file'), async (req, res) => {
+router.post("/:id/upload", auth, upload.single("file"), async (req, res) => {
   try {
     const claim = await Claim.findById(req.params.id);
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+      return res.status(404).json({ error: "Claim not found" });
     }
 
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({ error: "No file uploaded" });
     }
 
     // Get current policy for file validation
     const policy = await getCurrentPolicy();
     if (!policy) {
-      return res.status(500).json({ error: 'System policy not configured' });
+      return res.status(500).json({ error: "System policy not configured" });
     }
 
     // Validate file type
-    const fileExtension = req.file.originalname.split('.').pop().toLowerCase();
-    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+    const fileExtension = req.file.originalname.split(".").pop().toLowerCase();
+    const allowedExtensions = ["pdf", "jpg", "jpeg", "png"];
     if (!allowedExtensions.includes(fileExtension)) {
-      return res.status(400).json({ error: 'File type not allowed. Only PDF, JPG, JPEG, and PNG files are allowed.' });
+      return res
+        .status(400)
+        .json({
+          error:
+            "File type not allowed. Only PDF, JPG, JPEG, and PNG files are allowed.",
+        });
     }
 
     // Validate file size
     if (req.file.size > (policy.maxFileSizeMB || 10) * 1024 * 1024) {
-      return res.status(400).json({ error: 'File size exceeds limit' });
+      return res.status(400).json({ error: "File size exceeds limit" });
     }
 
     // Store file using storage service
@@ -1202,23 +1291,23 @@ router.post('/:id/upload', auth, upload.single('file'), async (req, res) => {
       size: req.file.size,
       mime: req.file.mimetype,
       storageKey: fileKey,
-      label: 'attachment'
+      label: "attachment",
     };
 
     claim.attachments.push(attachment);
     await claim.save();
 
     // Create audit log
-    await createAuditLog(req.user._id, 'UPLOAD_ATTACHMENT', 'CLAIM', {
+    await createAuditLog(req.user._id, "UPLOAD_ATTACHMENT", "CLAIM", {
       claimId: claim._id,
       fileName: req.file.originalname,
-      fileSize: req.file.size
+      fileSize: req.file.size,
     });
 
     res.json(attachment);
   } catch (error) {
-    console.error('Upload attachment error:', error);
-    res.status(500).json({ error: 'Failed to upload attachment' });
+    console.error("Upload attachment error:", error);
+    res.status(500).json({ error: "Failed to upload attachment" });
   }
 });
 
@@ -1284,7 +1373,7 @@ router.post('/:id/upload', auth, upload.single('file'), async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:id', auth, async (req, res) => {
+router.delete("/:id", auth, async (req, res) => {
   try {
     const claimId = req.params.id;
     const user = req.user;
@@ -1292,39 +1381,43 @@ router.delete('/:id', auth, async (req, res) => {
     // Find the claim
     const claim = await Claim.findById(claimId);
     if (!claim) {
-      return res.status(404).json({ error: 'Claim not found' });
+      return res.status(404).json({ error: "Claim not found" });
     }
 
     // Check permissions based on role and claim status
     let canDelete = false;
-    let reason = '';
+    let reason = "";
 
-    if (user.role === 'admin') {
+    if (user.role === "admin") {
       canDelete = true;
-      reason = 'Admin can delete any claim';
-    } else if (user.role === 'employee') {
+      reason = "Admin can delete any claim";
+    } else if (user.role === "employee") {
       // Employees can delete their own claims if not yet approved
       if (claim.employeeId.toString() === user._id.toString()) {
-        if (['submitted', 'rejected'].includes(claim.status)) {
+        if (["submitted", "rejected"].includes(claim.status)) {
           canDelete = true;
-          reason = 'Employee can delete own claim before approval';
+          reason = "Employee can delete own claim before approval";
         } else {
           reason = `Cannot delete claim with status: ${claim.status}`;
         }
       } else {
-        reason = 'Can only delete own claims';
+        reason = "Can only delete own claims";
       }
-
-    } else if (user.role === 'finance_manager' || user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
+    } else if (
+      user.role === "finance_manager" ||
+      user.role === "executive" ||
+      user.email === "velan@theyellow.network" ||
+      user.email === "gg@theyellownetwork.com"
+    ) {
       // Finance managers and executives can delete any claim at any time
       canDelete = true;
       reason = `${user.role} can delete any claim`;
     }
 
     if (!canDelete) {
-      return res.status(403).json({ 
-        error: 'Permission denied', 
-        reason: reason 
+      return res.status(403).json({
+        error: "Permission denied",
+        reason: reason,
       });
     }
 
@@ -1337,7 +1430,10 @@ router.delete('/:id', auth, async (req, res) => {
               await storageService.remove(attachment.storageKey);
               console.log(`Deleted file: ${attachment.storageKey}`);
             } catch (fileError) {
-              console.error(`Failed to delete file ${attachment.storageKey}:`, fileError);
+              console.error(
+                `Failed to delete file ${attachment.storageKey}:`,
+                fileError
+              );
               // Continue with claim deletion even if file deletion fails
             }
           }
@@ -1349,25 +1445,27 @@ router.delete('/:id', auth, async (req, res) => {
     await Claim.findByIdAndDelete(claimId);
 
     // Create audit log
-    await createAuditLog(user._id, 'DELETE_CLAIM', 'CLAIM', {
+    await createAuditLog(user._id, "DELETE_CLAIM", "CLAIM", {
       claimId: claimId,
       employeeId: claim.employeeId,
       category: claim.category,
       grandTotal: claim.grandTotal,
       status: claim.status,
-      reason: reason
+      reason: reason,
     });
 
-    console.log(`Claim ${claimId} deleted by ${user.role} ${user.name} - ${reason}`);
+    console.log(
+      `Claim ${claimId} deleted by ${user.role} ${user.name} - ${reason}`
+    );
 
-    res.json({ 
-      success: true, 
-      message: 'Claim deleted successfully',
-      reason: reason
+    res.json({
+      success: true,
+      message: "Claim deleted successfully",
+      reason: reason,
     });
   } catch (error) {
-    console.error('Delete claim error:', error);
-    res.status(500).json({ error: 'Failed to delete claim' });
+    console.error("Delete claim error:", error);
+    res.status(500).json({ error: "Failed to delete claim" });
   }
 });
 
@@ -1375,29 +1473,33 @@ router.delete('/:id', auth, async (req, res) => {
  * GET /api/claims/debug-policy
  * Debug endpoint to check current policy
  */
-router.get('/debug-policy', auth, async (req, res) => {
+router.get("/debug-policy", auth, async (req, res) => {
   try {
     const policy = await getCurrentPolicy();
-    const { validCategories, validBusinessUnits } = await import('../lib/categoryMaster.js');
-    
+    const { validCategories, validBusinessUnits } = await import(
+      "../lib/categoryMaster.js"
+    );
+
     res.json({
       policy: {
         id: policy._id,
         categories: policy.claimCategories,
-        categoriesCount: policy.claimCategories?.length
+        categoriesCount: policy.claimCategories?.length,
       },
       categoryMaster: {
         categories: validCategories,
         categoriesCount: validCategories.length,
-        businessUnits: validBusinessUnits
+        businessUnits: validBusinessUnits,
       },
       matches: {
-        categoriesMatch: JSON.stringify(policy.claimCategories) === JSON.stringify(validCategories)
-      }
+        categoriesMatch:
+          JSON.stringify(policy.claimCategories) ===
+          JSON.stringify(validCategories),
+      },
     });
   } catch (error) {
-    console.error('Debug policy error:', error);
-    res.status(500).json({ error: 'Failed to get policy debug info' });
+    console.error("Debug policy error:", error);
+    res.status(500).json({ error: "Failed to get policy debug info" });
   }
 });
 
@@ -1409,38 +1511,39 @@ const canAccessFile = async (req, res, next) => {
   try {
     // Find the claim that contains this file
     const claim = await Claim.findOne({
-      'lineItems.attachments.storageKey': storageKey
+      "lineItems.attachments.storageKey": storageKey,
     });
 
     if (!claim) {
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).json({ error: "File not found" });
     }
 
     // Admin can access all files
-    if (user.role === 'admin') {
+    if (user.role === "admin") {
       req.claim = claim;
       return next();
     }
 
     // Employee can only access files from their own claims
-    if (user.role === 'employee' && claim.employeeId.toString() === user._id.toString()) {
+    if (
+      user.role === "employee" &&
+      claim.employeeId.toString() === user._id.toString()
+    ) {
       req.claim = claim;
       return next();
     }
 
-
-
     // Finance manager and executives can access files from all claims for complete oversight
-    if (user.role === 'finance_manager' || user.role === 'executive') {
+    if (user.role === "finance_manager" || user.role === "executive") {
       // Finance managers and executives should have access to all claim files for complete oversight
       req.claim = claim;
       return next();
     }
 
-    return res.status(403).json({ error: 'Access denied to this file' });
+    return res.status(403).json({ error: "Access denied to this file" });
   } catch (error) {
-    console.error('Error in canAccessFile:', error);
-    res.status(500).json({ error: 'Error checking file access' });
+    console.error("Error in canAccessFile:", error);
+    res.status(500).json({ error: "Error checking file access" });
   }
 };
 
@@ -1502,24 +1605,51 @@ const canAccessFile = async (req, res, next) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/files/:storageKey', auth, canAccessFile, async (req, res) => {
+router.get("/files/:storageKey", auth, canAccessFile, async (req, res) => {
+  let fileStream;
   try {
     const { storageKey } = req.params;
-    
+
     // Get file info and stream
     const fileInfo = await storageService.getInfo(storageKey);
-    const fileStream = await storageService.getStream(storageKey);
-    
+    fileStream = await storageService.getStream(storageKey);
+
     // Set appropriate headers
-    res.setHeader('Content-Type', fileInfo.mime);
-    res.setHeader('Content-Length', fileInfo.size);
-    res.setHeader('Content-Disposition', `inline; filename="${storageKey}"`);
-    
+    res.setHeader("Content-Type", fileInfo.mime || "application/octet-stream");
+    res.setHeader("Content-Length", fileInfo.size || 0);
+    res.setHeader("Content-Disposition", `inline; filename="${storageKey}"`);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+
+    // Handle stream errors
+    fileStream.on("error", (error) => {
+      console.error("Stream error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Error streaming file" });
+      } else {
+        res.end();
+      }
+    });
+
+    // Handle response close/abort
+    req.on("close", () => {
+      if (fileStream && typeof fileStream.destroy === "function") {
+        fileStream.destroy();
+      }
+    });
+
     // Pipe the file stream to response
     fileStream.pipe(res);
   } catch (error) {
-    console.error('File serve error:', error);
-    res.status(404).json({ error: 'File not found' });
+    console.error("File serve error:", error);
+    if (!res.headersSent) {
+      res.status(404).json({ error: "File not found" });
+    } else {
+      res.end();
+    }
+    // Clean up stream if it exists
+    if (fileStream && typeof fileStream.destroy === "function") {
+      fileStream.destroy();
+    }
   }
 });
 

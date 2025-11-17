@@ -1,10 +1,54 @@
-import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
+// IMPORTANT: Load environment variables FIRST, before any other imports
+// that might use environment variables (like storage service)
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables based on environment, but only if the file exists.
+// On platforms like Render/Heroku, environment variables are injected and no file is present.
+// Try to load .env first (common convention), then environment-specific files
+const envPath = path.join(__dirname, '.env');
+const envFilename = process.env.NODE_ENV === 'production' ? 'config.production.env' : 'config.env';
+const configEnvPath = path.join(__dirname, envFilename);
+
+// Load .env first if it exists (highest priority)
+if (fs.existsSync(envPath)) {
+  dotenv.config({ path: envPath });
+  console.log('✅ Loaded .env file from:', envPath);
+} else {
+  console.log('⚠️  .env file not found at:', envPath);
+}
+
+// Then load environment-specific config (will override .env values)
+if (fs.existsSync(configEnvPath)) {
+  dotenv.config({ path: configEnvPath });
+  console.log('✅ Loaded config file from:', configEnvPath);
+} else {
+  console.log('⚠️  Config file not found at:', configEnvPath);
+}
+
+// Fallback to default dotenv behavior if no files found
+if (!fs.existsSync(envPath) && !fs.existsSync(configEnvPath)) {
+  dotenv.config();
+  console.log('⚠️  Using default dotenv (no .env files found)');
+}
+
+// Debug: Check if AWS credentials are loaded
+console.log('🔍 Environment check after loading:', {
+  hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+  hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+  hasRegion: !!process.env.AWS_REGION,
+  bucketName: process.env.AWS_S3_BUCKET_NAME || 'not set'
+});
+
+// Now import other modules (they can safely use environment variables)
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
@@ -21,21 +65,10 @@ import leaveRoutes from './routes/leaveRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.js';
 
+import checkRoute from './routes/checkRoute.js';
+
 // Import middleware
 import { auth } from './middleware/auth.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load environment variables based on environment, but only if the file exists.
-// On platforms like Render/Heroku, environment variables are injected and no file is present.
-const envFilename = process.env.NODE_ENV === 'production' ? 'config.production.env' : 'config.env';
-const envPath = path.join(__dirname, envFilename);
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-} else {
-  dotenv.config();
-}
 
 // Initialize Application Insights in production
 let appInsights;
@@ -211,6 +244,7 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/claims', claimRoutes);
+app.use('/api/excel', checkRoute);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/users', userRoutes);

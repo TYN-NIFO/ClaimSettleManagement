@@ -3,60 +3,94 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Storage service interface with Azure Blob Storage support
+ * Storage service interface with AWS S3 support
  */
 export class StorageService {
   constructor() {
     this.uploadDir = path.join(process.cwd(), "uploads");
     this.useCloudStorage =
-      process.env.AZURE_STORAGE_CONNECTION_STRING &&
-      process.env.AZURE_STORAGE_CONNECTION_STRING.trim() !== "";
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_REGION &&
+      process.env.AWS_ACCESS_KEY_ID.trim() !== "" &&
+      process.env.AWS_SECRET_ACCESS_KEY.trim() !== "" &&
+      process.env.AWS_REGION.trim() !== "";
 
     console.log("Storage Service Initialization:", {
-      hasConnectionString: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
-      connectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING?.length || 0,
+      hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+      hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+      hasRegion: !!process.env.AWS_REGION,
       useCloudStorage: this.useCloudStorage,
       nodeEnv: process.env.NODE_ENV
     });
 
     if (this.useCloudStorage) {
-      this.initializeAzureBlob();
+      this.initializeS3();
     } else {
-      console.log("Using local storage - Azure not configured");
+      console.log("Using local storage - AWS S3 not configured");
       this.ensureUploadDir();
     }
   }
 
   /**
-   * Initialize Azure Blob Storage client
+   * Initialize AWS S3 client
    */
-  async initializeAzureBlob() {
+  async initializeS3() {
     try {
-      const { BlobServiceClient } = await import("@azure/storage-blob");
+      const { S3Client } = await import("@aws-sdk/client-s3");
 
-      this.blobServiceClient = BlobServiceClient.fromConnectionString(
-        process.env.AZURE_STORAGE_CONNECTION_STRING
-      );
+      this.s3Client = new S3Client({
+        region: process.env.AWS_REGION,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        },
+      });
 
-      this.containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || process.env.AZURE_STORAGE_CONTAINER || "claim-files";
-      this.containerClient = this.blobServiceClient.getContainerClient(
-        this.containerName
-      );
+      this.bucketName = process.env.AWS_S3_BUCKET_NAME || "claim-files";
 
-      // Ensure container exists
-      await this.containerClient.createIfNotExists();
+      // Ensure bucket exists (or create if needed)
+      await this.ensureBucketExists();
 
       console.log(
-        "Azure Blob Storage initialized for container:",
-        this.containerName
+        "AWS S3 initialized for bucket:",
+        this.bucketName
       );
     } catch (error) {
       console.error(
-        "Failed to initialize Azure Blob Storage, falling back to local storage:",
+        "Failed to initialize AWS S3, falling back to local storage:",
         error
       );
       this.useCloudStorage = false;
       this.ensureUploadDir();
+    }
+  }
+
+  /**
+   * Ensure S3 bucket exists
+   */
+  async ensureBucketExists() {
+    try {
+      const { HeadBucketCommand, CreateBucketCommand } = await import("@aws-sdk/client-s3");
+      
+      try {
+        await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucketName }));
+        console.log(`Bucket '${this.bucketName}' already exists`);
+      } catch (error) {
+        if (error.name === "NotFound" || error.$metadata?.httpStatusCode === 404) {
+          // Bucket doesn't exist, try to create it
+          try {
+            await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucketName }));
+            console.log(`Created bucket '${this.bucketName}'`);
+          } catch (createError) {
+            console.warn(`Could not create bucket '${this.bucketName}'. It may need to be created manually or you may not have permissions.`);
+          }
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.warn("Could not verify bucket existence:", error.message);
     }
   }
 
@@ -96,8 +130,8 @@ export class StorageService {
       const extension = path.extname(file.originalname);
       const storageKey = `${fileId}${extension}`;
 
-      if (this.useCloudStorage && this.containerClient) {
-        return await this.saveToAzureBlob(file, storageKey, fileId);
+      if (this.useCloudStorage && this.s3Client) {
+        return await this.saveToS3(file, storageKey, fileId);
       } else {
         return await this.saveToLocal(file, storageKey, fileId);
       }
@@ -108,22 +142,25 @@ export class StorageService {
   }
 
   /**
-   * Save file to Azure Blob Storage
+   * Save file to AWS S3
    */
-  async saveToAzureBlob(file, storageKey, fileId) {
-    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
+  async saveToS3(file, storageKey, fileId) {
+    const { PutObjectCommand } = await import("@aws-sdk/client-s3");
 
-    await blockBlobClient.upload(file.buffer, file.buffer.length, {
-      blobHTTPHeaders: {
-        blobContentType: file.mimetype,
-      },
-      metadata: {
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: storageKey,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      Metadata: {
         originalName: file.originalname,
         fileId: fileId,
       },
     });
 
-    console.log("File saved to Azure Blob Storage:", storageKey);
+    await this.s3Client.send(command);
+
+    console.log("File saved to AWS S3:", storageKey);
 
     return {
       storageKey,
@@ -165,20 +202,26 @@ export class StorageService {
    * @returns {Promise<void>}
    */
   async remove(storageKey) {
-    if (this.useCloudStorage && this.containerClient) {
-      return await this.removeFromAzureBlob(storageKey);
+    if (this.useCloudStorage && this.s3Client) {
+      return await this.removeFromS3(storageKey);
     } else {
       return await this.removeFromLocal(storageKey);
     }
   }
 
   /**
-   * Remove file from Azure Blob Storage
+   * Remove file from AWS S3
    */
-  async removeFromAzureBlob(storageKey) {
-    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
-    await blockBlobClient.delete();
-    console.log("File removed from Azure Blob Storage:", storageKey);
+  async removeFromS3(storageKey) {
+    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+
+    const command = new DeleteObjectCommand({
+      Bucket: this.bucketName,
+      Key: storageKey,
+    });
+
+    await this.s3Client.send(command);
+    console.log("File removed from AWS S3:", storageKey);
   }
 
   /**
@@ -204,20 +247,33 @@ export class StorageService {
    * @returns {Promise<fs.ReadStream|ReadableStream>}
    */
   async getStream(storageKey) {
-    if (this.useCloudStorage && this.containerClient) {
-      return await this.getStreamFromAzureBlob(storageKey);
+    if (this.useCloudStorage && this.s3Client) {
+      return await this.getStreamFromS3(storageKey);
     } else {
       return await this.getStreamFromLocal(storageKey);
     }
   }
 
   /**
-   * Get file stream from Azure Blob Storage
+   * Get file stream from AWS S3
    */
-  async getStreamFromAzureBlob(storageKey) {
-    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
-    const response = await blockBlobClient.download();
-    return response.readableStreamBody;
+  async getStreamFromS3(storageKey) {
+    const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: storageKey,
+    });
+
+    const response = await this.s3Client.send(command);
+    
+    // AWS S3 SDK v3 returns response.Body as a Readable stream
+    // Ensure it's properly handled for Express piping
+    if (!response.Body) {
+      throw new Error("No body in S3 response");
+    }
+    
+    return response.Body;
   }
 
   /**
@@ -243,24 +299,29 @@ export class StorageService {
    * @returns {Promise<{size: number, mime: string}>}
    */
   async getInfo(storageKey) {
-    if (this.useCloudStorage && this.containerClient) {
-      return await this.getInfoFromAzureBlob(storageKey);
+    if (this.useCloudStorage && this.s3Client) {
+      return await this.getInfoFromS3(storageKey);
     } else {
       return await this.getInfoFromLocal(storageKey);
     }
   }
 
   /**
-   * Get file info from Azure Blob Storage
+   * Get file info from AWS S3
    */
-  async getInfoFromAzureBlob(storageKey) {
-    const blockBlobClient = this.containerClient.getBlockBlobClient(storageKey);
-    const properties = await blockBlobClient.getProperties();
+  async getInfoFromS3(storageKey) {
+    const { HeadObjectCommand } = await import("@aws-sdk/client-s3");
+
+    const command = new HeadObjectCommand({
+      Bucket: this.bucketName,
+      Key: storageKey,
+    });
+
+    const response = await this.s3Client.send(command);
 
     return {
-      size: properties.contentLength,
-      mime:
-        properties.contentType || this.getMimeType(path.extname(storageKey)),
+      size: response.ContentLength || 0,
+      mime: response.ContentType || this.getMimeType(path.extname(storageKey)),
     };
   }
 
@@ -309,6 +370,26 @@ export class StorageService {
   }
 }
 
-// Create singleton instance
-const storageService = new StorageService();
+let storageServiceInstance = null;
+
+function getStorageService() {
+  if (!storageServiceInstance) {
+    storageServiceInstance = new StorageService();
+  }
+  return storageServiceInstance;
+}
+
+// Export a proxy that initializes on first use
+const storageService = new Proxy({}, {
+  get(target, prop) {
+    const service = getStorageService();
+    const value = service[prop];
+    // If it's a function, bind it to the service instance
+    if (typeof value === 'function') {
+      return value.bind(service);
+    }
+    return value;
+  }
+});
+
 export default storageService;
