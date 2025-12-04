@@ -279,9 +279,12 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
   const getLeaveDataForDate = (date: Date) => {
     const dateStr = toLocalYmd(date);
     return leaves.filter((leave: any) => {
-      const leaveDate = new Date(leave.startDate);
-      const leaveDateStr = toLocalYmd(leaveDate);
-      return leaveDateStr === dateStr;
+      const leaveStart = new Date(leave.startDate);
+      const leaveEnd = new Date(leave.endDate);
+      const currentDate = new Date(dateStr);
+      
+      // Check if the current date falls within the leave period (inclusive)
+      return currentDate >= leaveStart && currentDate <= leaveEnd;
     });
   };
 
@@ -360,16 +363,20 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
                 <div className="space-y-1">
                   {leaveData.slice(0, 11).map((leave: any, leaveIndex: number) => {
                     const isCurrentUser = leave.employeeEmail === currentUser?.email;
+                    const isPending = leave.status === 'submitted';
+                    const isRejected = leave.status === 'rejected';
                     return (
                       <div
                         key={leaveIndex}
                         className={`text-xs p-1 rounded border ${getLeaveTypeColor(leave.leaveType)} ${
                           isCurrentUser ? 'ring-1 ring-blue-400' : ''
-                        }`}
+                        } ${isPending ? 'opacity-60 border-dashed' : ''} ${isRejected ? 'opacity-40 line-through' : ''}`}
                         title={`${leave.employee?.name || leave.employeeEmail} - ${leave.leaveType}${leave.reason ? ` - ${leave.reason}` : ''} (${leave.status})`}
                       >
-                        <div className="font-medium truncate">
-                          {isCurrentUser ? 'Me' : (leave.employee?.name || leave.employeeEmail).split(' ')[0]}
+                        <div className="font-medium truncate flex items-center justify-between">
+                          <span>{isCurrentUser ? 'Me' : (leave.employee?.name || leave.employeeEmail).split(' ')[0]}</span>
+                          {isPending && <span className="text-[10px] ml-1">⏳</span>}
+                          {isRejected && <span className="text-[10px] ml-1">❌</span>}
                         </div>
                         <div className="text-xs opacity-75">{leave.leaveType}</div>
                       </div>
@@ -387,34 +394,46 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
         </div>
         
         {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-            <span className="text-xs text-gray-600">Planned Leave</span>
+        <div className="mt-4 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+              <span className="text-xs text-gray-600">Planned Leave</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
+              <span className="text-xs text-gray-600">Unplanned Leave</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
+              <span className="text-xs text-gray-600">WFH</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
+              <span className="text-xs text-gray-600">Permission</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
+              <span className="text-xs text-gray-600">Business Trip</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-indigo-100 border border-indigo-300 rounded"></div>
+              <span className="text-xs text-gray-600">OD</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-pink-100 border border-pink-300 rounded"></div>
+              <span className="text-xs text-gray-600">Flexi</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
-            <span className="text-xs text-gray-600">Unplanned Leave</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
-            <span className="text-xs text-gray-600">WFH</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
-            <span className="text-xs text-gray-600">Permission</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
-            <span className="text-xs text-gray-600">Business Trip</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-indigo-100 border border-indigo-300 rounded"></div>
-            <span className="text-xs text-gray-600">OD</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-pink-100 border border-pink-300 rounded"></div>
-            <span className="text-xs text-gray-600">Flexi</span>
+          <div className="flex flex-wrap gap-3 text-xs text-gray-500 border-t pt-2">
+            <div className="flex items-center space-x-1">
+              <span>⏳</span>
+              <span>Pending approval (dashed border)</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <span>❌</span>
+              <span>Rejected (strikethrough)</span>
+            </div>
           </div>
         </div>
       </div>

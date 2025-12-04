@@ -649,8 +649,8 @@ const getLeavesByDateRange = async (req, res) => {
     }
 
     // Find leaves that overlap with the date range
+    // Show all leaves (submitted, approved, rejected) for calendar visibility
     const leaves = await Leave.find({
-      status: 'approved',
       $or: [
         // Leave starts within the range
         { startDate: { $gte: start, $lte: end } },
@@ -669,6 +669,7 @@ const getLeavesByDateRange = async (req, res) => {
         startDate: leave.startDate.toISOString().split('T')[0],
         endDate: leave.endDate.toISOString().split('T')[0],
         leaveType: leave.type,
+        status: leave.status,
         reason: leave.reason,
         hours: leave.hours,
         isFullDay: leave.isFullDay,
@@ -677,7 +678,8 @@ const getLeavesByDateRange = async (req, res) => {
           name: leave.employeeId.name,
           email: leave.employeeId.email,
           department: leave.employeeId.department
-        }
+        },
+        employeeEmail: leave.employeeId.email
       }))
     };
 
