@@ -2,21 +2,23 @@
 
 A robust Node.js/Express backend API for managing insurance claims with role-based access control, file uploads, and comprehensive audit logging.
 
-## 🚀 Current Deployment
+## 🚀 Deployment
 
-**Live API:** https://claimsettlemanagement.onrender.com/api
-
+**Platform:** Vercel (Serverless) ⚡  
 **Status:** ✅ Production Ready
+
+See [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md) for deployment guide.
 
 ## 🏗️ Architecture
 
 - **Framework:** Express.js
 - **Database:** MongoDB with Mongoose ODM
 - **Authentication:** JWT with refresh tokens
-- **File Uploads:** Multer with UUID-based naming
+- **File Storage:** AWS S3
+- **Email:** SendGrid
 - **Security:** Helmet, CORS, Rate limiting
 - **Monitoring:** Application Insights (Azure)
-- **Deployment:** Render (PaaS)
+- **Deployment:** Vercel Serverless Functions
 
 ## 📁 Project Structure
 

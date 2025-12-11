@@ -2,6 +2,7 @@ import Leave from '../models/Leave.js';
 import User from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
 import { createAuditLog } from './authController.js';
+import { getNextLeaveSequence } from '../services/counterService.js';
 
 // Create a new leave request
 const createLeave = async (req, res) => {
@@ -44,8 +45,14 @@ const createLeave = async (req, res) => {
       });
     }
 
+    // Generate unique leave ID using atomic counter
+    const seq = await getNextLeaveSequence();
+    const year = new Date().getFullYear();
+    const leaveId = `leave_${year}_${String(seq).padStart(5, '0')}`;
+
     // Create leave request
     const leave = new Leave({
+      leaveId,
       employeeId: req.user._id,
       type,
       startDate: start,
@@ -771,8 +778,14 @@ const createBulkLeaves = async (req, res) => {
           continue;
         }
 
+        // Generate unique leave ID using atomic counter
+        const seq = await getNextLeaveSequence();
+        const year = new Date().getFullYear();
+        const leaveId = `leave_${year}_${String(seq).padStart(5, '0')}`;
+
         // Create leave record
         const leave = new Leave({
+          leaveId,
           employeeId: employee._id,
           type: leaveData.leaveType,
           startDate: startDate,

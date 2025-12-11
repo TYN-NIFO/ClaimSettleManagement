@@ -7,18 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "prod": "NODE_ENV=production node server.js",
-    "test": "echo 'No tests specified'",
-    "lint": "eslint .",
+    "deploy": "vercel --prod",
+    "deploy:preview": "vercel",
+    "check-deploy": "node scripts/check-deployment-ready.js",
     "seed": "node scripts/seed.js",
-    "check-claims": "node scripts/check-claims.js",
     "create-admin": "node scripts/create-admin.js",
-    "assign-supervisors": "node scripts/assign-supervisors.js",
-    "update-supervisor-level": "node scripts/update-supervisor-level.js",
-    "create-finance-manager": "node scripts/create-finance-manager.js",
-    "validate-prod": "node scripts/deploy-production.js",
-    "reset-policy": "node scripts/reset-policy.js",
-    "setup-aws": "node scripts/setup-aws-s3.js"
+    "init-counters": "node scripts/initialize-counters.js",
+    "test-counters": "node scripts/test-counters.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Local env files
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Uploads (use cloud storage instead)
+uploads
+
+# Scripts (not needed in production)
+scripts
+
+# Documentation
+*.md
+!README.md
+
+# Development files
+.npmrc

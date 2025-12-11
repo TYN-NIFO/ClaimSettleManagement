@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getNextClaimSequence } from '../services/counterService.js';
 
 const AttachmentSchema = new mongoose.Schema({
   fileId: String,
@@ -28,6 +29,12 @@ const AdvanceSchema = new mongoose.Schema({
 }, { _id: true });
 
 const ClaimSchema = new mongoose.Schema({
+  // Claim identification
+  claimId: {
+    type: String,
+    unique: true,
+    required: false  // Auto-generated in pre-save hook
+  },
   employeeId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
@@ -112,6 +119,27 @@ const ClaimSchema = new mongoose.Schema({
   }
 }, { 
   timestamps: true 
+});
+
+// Indexes for efficient queries
+ClaimSchema.index({ employeeId: 1, createdAt: -1 });
+ClaimSchema.index({ status: 1 });
+ClaimSchema.index({ claimId: 1 });
+
+// Pre-save middleware to generate claimId
+ClaimSchema.pre('save', async function(next) {
+  if (!this.claimId) {
+    try {
+      const seq = await getNextClaimSequence();
+      const year = new Date().getFullYear();
+      this.claimId = `claim_${year}_${String(seq).padStart(5, '0')}`;
+    } catch (error) {
+      console.error('Error generating claim ID:', error);
+      return next(new Error('Failed to generate claim ID'));
+    }
+  }
+  
+  next();
 });
 
 export default mongoose.model('Claim', ClaimSchema);

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getNextLeaveSequence } from '../services/counterService.js';
 
 const LeaveSchema = new mongoose.Schema({
   // Leave identification
@@ -125,17 +126,17 @@ LeaveSchema.virtual('durationInDays').get(function() {
   return diffDays;
 });
 
-// Pre-save middleware to generate leaveId
+// Pre-save middleware to generate leaveId and validate
 LeaveSchema.pre('save', async function(next) {
   if (!this.leaveId) {
-    const year = new Date().getFullYear();
-    const count = await mongoose.model('Leave').countDocuments({
-      createdAt: {
-        $gte: new Date(year, 0, 1),
-        $lt: new Date(year + 1, 0, 1)
-      }
-    });
-    this.leaveId = `leave_${year}_${String(count + 1).padStart(5, '0')}`;
+    try {
+      const seq = await getNextLeaveSequence();
+      const year = new Date().getFullYear();
+      this.leaveId = `leave_${year}_${String(seq).padStart(5, '0')}`;
+    } catch (error) {
+      console.error('Error generating leave ID:', error);
+      return next(new Error('Failed to generate leave ID'));
+    }
   }
   
   // Validation: endDate should be >= startDate
