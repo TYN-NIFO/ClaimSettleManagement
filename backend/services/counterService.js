@@ -11,6 +11,14 @@ import mongoose from 'mongoose';
  */
 export async function getNextLeaveSequence() {
   try {
+    // First, ensure the counter exists with a default value
+    await mongoose.connection.db.collection("counters").updateOne(
+      { _id: "leaveId" },
+      { $setOnInsert: { seq: 286 } }, // Default starting value
+      { upsert: true }
+    );
+
+    // Now increment and get the new value
     const result = await mongoose.connection.db.collection("counters").findOneAndUpdate(
       { _id: "leaveId" },        // counter key
       { $inc: { seq: 1 } },      // atomic increment
@@ -20,10 +28,16 @@ export async function getNextLeaveSequence() {
       }
     );
     
-    return result.seq;
+    // Handle case where result might be null or seq might be undefined
+    if (!result || !result.value || result.value.seq === undefined || result.value.seq === null) {
+      console.error('Counter result is invalid:', result);
+      throw new Error('Invalid counter result - seq is undefined');
+    }
+    
+    return result.value.seq;
   } catch (error) {
     console.error('Error getting next leave sequence:', error);
-    throw new Error('Failed to generate leave sequence number');
+    throw new Error('Failed to generate leave sequence number: ' + error.message);
   }
 }
 
@@ -33,6 +47,14 @@ export async function getNextLeaveSequence() {
  */
 export async function getNextClaimSequence() {
   try {
+    // First, ensure the counter exists with a default value
+    await mongoose.connection.db.collection("counters").updateOne(
+      { _id: "claimId" },
+      { $setOnInsert: { seq: 0 } }, // Default starting value
+      { upsert: true }
+    );
+
+    // Now increment and get the new value
     const result = await mongoose.connection.db.collection("counters").findOneAndUpdate(
       { _id: "claimId" },        // counter key
       { $inc: { seq: 1 } },      // atomic increment
@@ -42,10 +64,16 @@ export async function getNextClaimSequence() {
       }
     );
     
-    return result.seq;
+    // Handle case where result might be null or seq might be undefined
+    if (!result || !result.value || result.value.seq === undefined || result.value.seq === null) {
+      console.error('Counter result is invalid:', result);
+      throw new Error('Invalid counter result - seq is undefined');
+    }
+    
+    return result.value.seq;
   } catch (error) {
     console.error('Error getting next claim sequence:', error);
-    throw new Error('Failed to generate claim sequence number');
+    throw new Error('Failed to generate claim sequence number: ' + error.message);
   }
 }
 
@@ -65,7 +93,13 @@ export async function getNextSequence(counterType) {
       }
     );
     
-    return result.seq;
+    // Handle case where result might be null or seq might be undefined
+    if (!result || !result.value || result.value.seq === undefined || result.value.seq === null) {
+      console.error('Counter result is invalid:', result);
+      throw new Error('Invalid counter result');
+    }
+    
+    return result.value.seq;
   } catch (error) {
     console.error(`Error getting next ${counterType} sequence:`, error);
     throw new Error(`Failed to generate ${counterType} sequence number`);
