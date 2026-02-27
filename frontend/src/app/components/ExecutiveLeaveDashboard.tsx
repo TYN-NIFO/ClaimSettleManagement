@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
 import {
-  useGetLeavesQuery,
-  useGetLeavesByDateRangeQuery,
   useGetLeaveAnalyticsQuery,
   useGetTodayLeavesQuery,
+  useGetLeavesByDateRangeQuery,
+  useGetHolidaysQuery,
 } from "@/lib/api";
 import LoadingSpinner from "./LoadingSpinner";
 import {
@@ -62,6 +62,8 @@ export default function ExecutiveLeaveDashboard({
       startDate: calendarFirstDay.toISOString().split("T")[0],
       endDate: calendarLastDay.toISOString().split("T")[0],
     });
+
+  const { data: holidaysData, isLoading: holidaysLoading } = useGetHolidaysQuery({ year: selectedYear });
 
   // Check if user has access to analytics
   const hasAnalyticsAccess = userRole === 'executive' || userRole === 'admin';
@@ -158,8 +160,8 @@ export default function ExecutiveLeaveDashboard({
         <button
           onClick={() => setViewMode("pending")}
           className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "pending"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
             }`}
         >
           <ClipboardCheck className="h-4 w-4 mr-2" />
@@ -168,8 +170,8 @@ export default function ExecutiveLeaveDashboard({
         <button
           onClick={() => setViewMode("calendar")}
           className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "calendar"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
             }`}
         >
           <Calendar className="h-4 w-4 mr-2" />
@@ -178,8 +180,8 @@ export default function ExecutiveLeaveDashboard({
         <button
           onClick={() => setViewMode("employees")}
           className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "employees"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
             }`}
         >
           <Users className="h-4 w-4 mr-2" />
@@ -194,7 +196,8 @@ export default function ExecutiveLeaveDashboard({
           year={selectedYear}
           month={calendarMonth}
           leaves={calendarData?.leaves || []}
-          isLoading={calendarLoading}
+          holidays={holidaysData || []}
+          isLoading={calendarLoading || holidaysLoading}
         />
       )}
 
@@ -407,12 +410,12 @@ function ExecutiveOverviewView({
                   <div className="flex items-center space-x-2">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${emp.leaveType === "Planned Leave"
-                          ? "bg-green-100 text-green-800"
-                          : emp.leaveType === "Unplanned Leave"
-                            ? "bg-red-100 text-red-800"
-                            : emp.leaveType === "WFH"
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-gray-100 text-gray-800"
+                        ? "bg-green-100 text-green-800"
+                        : emp.leaveType === "Unplanned Leave"
+                          ? "bg-red-100 text-red-800"
+                          : emp.leaveType === "WFH"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
                         }`}
                     >
                       {emp.leaveType}
@@ -438,6 +441,7 @@ interface ExecutiveCalendarViewProps {
   year: number;
   month: number;
   leaves: any[];
+  holidays: any[];
   isLoading: boolean;
 }
 
@@ -445,6 +449,7 @@ function ExecutiveCalendarView({
   year,
   month,
   leaves,
+  holidays,
   isLoading,
 }: ExecutiveCalendarViewProps) {
   // Generate calendar data
@@ -463,11 +468,10 @@ function ExecutiveCalendarView({
   }
 
   const getLeaveDataForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     return leaves.filter((leave: any) => {
-      const leaveDate = new Date(leave.startDate);
-      const leaveDateStr = leaveDate.toISOString().split("T")[0];
-      return leaveDateStr === dateStr;
+      const leaveDateStr = (leave.startDate || '').split("T")[0];
+      return leaveDateStr === localDateStr;
     });
   };
 
@@ -490,6 +494,23 @@ function ExecutiveCalendarView({
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
+  };
+
+  const getHolidayDataForDate = (date: Date) => {
+    if (!holidays) return [];
+
+    const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return holidays
+      .filter((holiday: any) => {
+        const holidayDateStr = (holiday.date || '').split("T")[0];
+        return holidayDateStr === localDateStr;
+      })
+      .map((holiday: any) => ({
+        date: holiday.date,
+        name: holiday.name,
+        isFlexi: holiday.isFlexi,
+        isHoliday: true,
+      }));
   };
 
   if (isLoading) {
@@ -535,19 +556,36 @@ function ExecutiveCalendarView({
             const isCurrentMonth = date.getMonth() === month - 1;
             const isToday = date.toDateString() === new Date().toDateString();
             const leaveData = getLeaveDataForDate(date);
+            const holidayData = getHolidayDataForDate(date);
+
+            const holiday = holidayData.length > 0 ? holidayData[0] : null;
+            let cellBg = isCurrentMonth ? "bg-white" : "bg-gray-50";
+            if (holiday) {
+              cellBg = holiday.isFlexi ? "bg-pink-50 border-pink-200" : "bg-indigo-50 border-indigo-200";
+            }
 
             return (
               <div
                 key={index}
-                className={`min-h-[100px] p-1 border border-gray-200 ${isCurrentMonth ? "bg-white" : "bg-gray-50"
-                  } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                className={`min-h-[100px] p-1 border ${cellBg} ${isToday ? "ring-2 ring-blue-500" : "border-gray-200"}`}
               >
                 <div
-                  className={`text-xs p-1 text-right ${isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                    } ${isToday ? "font-bold" : ""}`}
+                  className={`text-xs p-1 flex justify-between items-start ${isCurrentMonth ? (holiday ? "text-gray-900 font-medium" : "text-gray-900") : "text-gray-400"} ${isToday ? "font-bold" : ""}`}
                 >
-                  {date.getDate()}
+                  {holiday ? (
+                    <div className={`font-semibold truncate ${holiday.isFlexi ? "text-pink-800" : "text-indigo-800"}`}>
+                      {holiday.name}
+                    </div>
+                  ) : <div />}
+                  <span>{date.getDate()}</span>
                 </div>
+                {holiday && holiday.isFlexi && (
+                  <div className="px-1 mb-1">
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-100 text-pink-800 shadow-sm border border-pink-200">
+                      Flexi
+                    </span>
+                  </div>
+                )}
 
                 {/* Leave Indicators */}
                 <div className="space-y-1">
@@ -603,6 +641,14 @@ function ExecutiveCalendarView({
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
             <span className="text-xs text-gray-600">Permission</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div>
+            <span className="text-xs text-gray-600 font-medium">Holiday</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-pink-50 border border-pink-200 rounded"></div>
+            <span className="text-xs text-gray-600 font-medium">Flexi Holiday</span>
           </div>
         </div>
       </div>

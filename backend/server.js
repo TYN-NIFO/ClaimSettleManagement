@@ -60,6 +60,7 @@ import claimRoutes from './routes/claimRoutes.js';
 import policyRoutes from './routes/policyRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import leaveRoutes from './routes/leaveRoutes.js';
+import holidayRoutes from './routes/holidayRoutes.js';
 
 // Import Swagger
 import swaggerUi from 'swagger-ui-express';
@@ -185,15 +186,15 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Body parsing middleware
-app.use(express.json({ 
+app.use(express.json({
   limit: process.env.MAX_FILE_SIZE || '50mb',
   verify: (req, res, buf) => {
     req.rawBody = buf;
   }
 }));
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: process.env.MAX_FILE_SIZE || '50mb' 
+app.use(express.urlencoded({
+  extended: true,
+  limit: process.env.MAX_FILE_SIZE || '50mb'
 }));
 
 // Cookie parser
@@ -226,7 +227,7 @@ app.get('/health', (req, res) => {
     memory: process.memoryUsage(),
     version: process.env.npm_package_version || '1.0.0'
   };
-  
+
   res.json(healthInfo);
 });
 
@@ -246,21 +247,22 @@ app.use('/api/auth', authRoutes);
 app.use('/api/claims', claimRoutes);
 app.use('/api/excel', checkRoute);
 app.use('/api/leaves', leaveRoutes);
+app.use('/api/holidays', holidayRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/users', userRoutes);
 
 // Enhanced error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  
+
   // Track error in Application Insights if available
   if (appInsights && process.env.NODE_ENV === 'production') {
     appInsights.defaultClient.trackException({ exception: err });
   }
-  
+
   // Determine error status
   const statusCode = err.statusCode || err.status || 500;
-  
+
   // Prepare error response
   const errorResponse = {
     success: false,
@@ -270,7 +272,7 @@ app.use((err, req, res, next) => {
       details: err.message
     })
   };
-  
+
   res.status(statusCode).json(errorResponse);
 });
 
@@ -309,21 +311,21 @@ const connectDB = async (retries = 5) => {
 // Graceful shutdown
 const gracefulShutdown = (signal) => {
   console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
-  
+
   // Close server
   if (server) {
     server.close(() => {
       console.log('HTTP server closed');
-      
+
       // Close database connection
       mongoose.connection.close(false, () => {
         console.log('MongoDB connection closed');
-        
+
         // Stop Application Insights
         if (appInsights) {
           appInsights.defaultClient.flush();
         }
-        
+
         process.exit(0);
       });
     });
@@ -337,18 +339,18 @@ let server;
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📊 Application Insights: ${appInsights ? 'Enabled' : 'Disabled'}`);
       console.log(`🔒 Rate Limiting: ${process.env.RATE_LIMIT_MAX_REQUESTS || 100} requests per ${process.env.RATE_LIMIT_WINDOW_MS || 900000}ms`);
     });
-    
+
     // Handle graceful shutdown
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

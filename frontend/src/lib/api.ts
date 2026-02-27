@@ -54,7 +54,7 @@ const baseQueryWithReauth = async (args: any, api: any, extraOptions: any) => {
 
 export const api = createApi({
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['Claims', 'Policy', 'Users', 'Leaves'],
+  tagTypes: ['Claims', 'Policy', 'Users', 'Leaves', 'Holidays'],
   endpoints: (builder) => ({
     // Authentication
     token: builder.mutation({
@@ -408,6 +408,38 @@ export const api = createApi({
       ],
     }),
 
+    // Holidays
+    getHolidays: builder.query({
+      query: (params = {}) => ({
+        url: '/holidays',
+        params,
+      }),
+      providesTags: ['Holidays'],
+    }),
+    createHoliday: builder.mutation({
+      query: (holiday) => ({
+        url: '/holidays',
+        method: 'POST',
+        body: holiday,
+      }),
+      invalidatesTags: ['Holidays'],
+    }),
+    updateHoliday: builder.mutation({
+      query: ({ id, ...holiday }) => ({
+        url: `/holidays/${id}`,
+        method: 'PUT',
+        body: holiday,
+      }),
+      invalidatesTags: ['Holidays'],
+    }),
+    deleteHoliday: builder.mutation({
+      query: (id: string) => ({
+        url: `/holidays/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Holidays'],
+    }),
+
     // Users (Admin only)
     getUsers: builder.query({
       query: (params = {}) => ({
@@ -513,4 +545,10 @@ export const {
   useApproveLeaveMutation,
   useDeleteLeaveMutation,
   useGetEmployeeNamesQuery,
+
+  // Holidays
+  useGetHolidaysQuery,
+  useCreateHolidayMutation,
+  useUpdateHolidayMutation,
+  useDeleteHolidayMutation,
 } = api;

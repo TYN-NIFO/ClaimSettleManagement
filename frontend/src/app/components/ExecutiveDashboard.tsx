@@ -29,13 +29,14 @@ import {
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
 import ExecutiveLeaveDashboard from './ExecutiveLeaveDashboard';
+import HolidayConfiguration from './HolidayConfiguration';
 import FilterBar, { FilterState } from './FilterBar';
 import { categoryMaster } from '@/lib/categoryMaster';
 
 
 export default function ExecutiveDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
-  const [activeTab, setActiveTab] = useState('personal'); // 'personal' or 'organization'
+  const [activeTab, setActiveTab] = useState<'personal' | 'organization' | 'leave-dashboard' | 'holidays'>('personal'); // 'personal' or 'organization'
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
   const { data: leavesData, isLoading: leavesLoading } = useGetLeavesQuery({});
@@ -262,6 +263,15 @@ export default function ExecutiveDashboard() {
                       }`}
                   >
                     Leave Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('holidays')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'holidays'
+                      ? 'border-red-500 text-red-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                  >
+                    Holidays
                   </button>
                 </nav>
               </div>
@@ -625,6 +635,8 @@ export default function ExecutiveDashboard() {
                 userRole={user?.role || 'executive'}
                 userEmail={user?.email || ''}
               />
+            ) : activeTab === 'holidays' ? (
+              <HolidayConfiguration />
             ) : null}
           </>
         )}
