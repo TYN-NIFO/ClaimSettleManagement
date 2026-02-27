@@ -11,20 +11,36 @@ export default function SubmitLeavePage() {
   const router = useRouter();
 
   const handleSuccess = () => {
-    // Route back to appropriate dashboard based on user role or email
-    if (user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') {
-      router.push('/executive');
-    } else {
-      router.push('/employee');
+    // Route back to appropriate dashboard based on user role
+    switch (user?.role) {
+      case 'executive':
+        router.push('/executive');
+        break;
+      case 'finance_manager':
+        router.push('/finance');
+        break;
+      case 'admin':
+        router.push('/admin');
+        break;
+      default:
+        router.push('/employee');
     }
   };
 
   const handleCancel = () => {
-    // Route back to appropriate dashboard based on user role or email
-    if (user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') {
-      router.push('/executive');
-    } else {
-      router.push('/employee');
+    // Route back to appropriate dashboard based on user role
+    switch (user?.role) {
+      case 'executive':
+        router.push('/executive');
+        break;
+      case 'finance_manager':
+        router.push('/finance');
+        break;
+      case 'admin':
+        router.push('/admin');
+        break;
+      default:
+        router.push('/employee');
     }
   };
 
@@ -43,7 +59,7 @@ export default function SubmitLeavePage() {
               </svg>
               Back to Dashboard
             </button>
-            
+
             <div className="bg-white shadow rounded-lg">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h1 className="text-2xl font-bold text-gray-900">Submit Leave Request</h1>
@@ -51,9 +67,9 @@ export default function SubmitLeavePage() {
                   Submit your leave request for CTO/CEO approval
                 </p>
               </div>
-              
+
               <div className="p-6">
-                <LeaveForm 
+                <LeaveForm
                   onSuccess={handleSuccess}
                   onCancel={handleCancel}
                 />
@@ -74,7 +90,7 @@ export default function SubmitLeavePage() {
                   <li>For permission hours, specify exact duration needed</li>
                 </ul>
               </div>
-              
+
               <div>
                 <h4 className="font-medium mb-2">After Submitting:</h4>
                 <ul className="space-y-1 list-disc list-inside">

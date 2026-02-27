@@ -137,9 +137,9 @@ const getUserLeaves = async (req, res) => {
     // Calculate summary statistics for the year
     let yearSummary = null;
     if (year) {
-      const yearQuery = { 
+      const yearQuery = {
         employeeId: userId,
-        startDate: { 
+        startDate: {
           $gte: new Date(parseInt(year), 0, 1),
           $lt: new Date(parseInt(year) + 1, 0, 1)
         },
@@ -147,7 +147,7 @@ const getUserLeaves = async (req, res) => {
       };
 
       const yearLeaves = await Leave.find(yearQuery);
-      
+
       yearSummary = {
         totalLeaveDays: 0,
         plannedLeaveDays: 0,
@@ -161,7 +161,7 @@ const getUserLeaves = async (req, res) => {
 
       yearLeaves.forEach(leave => {
         const days = leave.durationInDays;
-        
+
         switch (leave.type) {
           case 'Planned Leave':
             yearSummary.plannedLeaveDays += days;
@@ -210,14 +210,7 @@ const getUserLeaves = async (req, res) => {
 // Get pending leave requests (for CTO/CEO approval)
 const getPendingLeaves = async (req, res) => {
   try {
-    // Check if user is authorized to approve leaves
-    const approvers = Leave.getApprovers();
-    if (!approvers.includes(req.user.email)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        details: 'Only CTO and CEO can view pending approvals'
-      });
-    }
+
 
     const { page = 1, limit = 50 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -260,7 +253,7 @@ const approveLeave = async (req, res) => {
 
     // Find the leave request
     const leave = await Leave.findById(leaveId).populate('employeeId', 'name email');
-    
+
     if (!leave) {
       return res.status(404).json({
         error: 'Leave not found',
@@ -269,7 +262,7 @@ const approveLeave = async (req, res) => {
     }
 
     // Check authorization
-    if (!leave.canApprove(req.user.email)) {
+    if (!leave.canApprove(req.user)) {
       return res.status(403).json({
         error: 'Access denied',
         details: 'You are not authorized to approve this leave request'
@@ -283,7 +276,7 @@ const approveLeave = async (req, res) => {
       'approval.approvedAt': new Date(),
       'approval.notes': notes
     };
-    
+
     if (action === 'reject') {
       updateData['approval.rejectionReason'] = rejectionReason;
     }
@@ -325,7 +318,7 @@ const updateLeave = async (req, res) => {
     const { type, startDate, endDate, hours, reason, timezone } = req.body;
 
     const leave = await Leave.findById(leaveId);
-    
+
     if (!leave) {
       return res.status(404).json({
         error: 'Leave not found',
@@ -358,7 +351,7 @@ const updateLeave = async (req, res) => {
     if (hours !== undefined) leave.hours = type === 'Permission' ? hours : null;
     if (reason !== undefined) leave.reason = reason;
     if (timezone) leave.timezone = timezone;
-    
+
     leave.isFullDay = leave.type !== 'Permission';
 
     await leave.save();
@@ -386,7 +379,7 @@ const deleteLeave = async (req, res) => {
     const { leaveId } = req.params;
 
     const leave = await Leave.findById(leaveId);
-    
+
     if (!leave) {
       return res.status(404).json({
         error: 'Leave not found',
@@ -426,17 +419,10 @@ const deleteLeave = async (req, res) => {
 // Get organization-wide leave analytics (for executives)
 const getLeaveAnalytics = async (req, res) => {
   try {
-    // Check if user is authorized to view analytics
-    const approvers = Leave.getApprovers();
-    if (!approvers.includes(req.user.email)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        details: 'Only CTO and CEO can view organization analytics'
-      });
-    }
+
 
     const { year = new Date().getFullYear(), month } = req.query;
-    
+
     // Date range
     let startDate, endDate;
     if (month) {
@@ -499,14 +485,14 @@ const getLeaveAnalytics = async (req, res) => {
           orgSummary.leavesByType[leave.type] = 0;
         }
         orgSummary.leavesByType[leave.type] += days;
-        
+
         // Update by department
         const dept = employee.department || 'Unknown';
         if (!orgSummary.leavesByDepartment[dept]) {
           orgSummary.leavesByDepartment[dept] = 0;
         }
         orgSummary.leavesByDepartment[dept] += days;
-        
+
         // Update employee summary and org-level leave totals
         switch (leave.type) {
           case 'Planned Leave':
@@ -538,7 +524,7 @@ const getLeaveAnalytics = async (req, res) => {
             break;
         }
       });
-      
+
       orgSummary.employeeSummaries.push({
         employee: {
           id: employee._id,
@@ -700,14 +686,7 @@ const getLeavesByDateRange = async (req, res) => {
 // Bulk upload leave data (CTO/CEO only)
 const createBulkLeaves = async (req, res) => {
   try {
-    // Check if user is authorized to bulk upload leaves
-    const approvers = Leave.getApprovers();
-    if (!approvers.includes(req.user.email)) {
-      return res.status(403).json({
-        error: 'Access denied',
-        details: 'Only CTO and CEO can bulk upload leave data'
-      });
-    }
+
 
     const { leaves } = req.body;
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useGetProfileQuery, useUpdateProfileMutation, useUploadAvatarMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 import Image from 'next/image';
 
 export default function SettingsPage() {
@@ -41,7 +42,7 @@ export default function SettingsPage() {
       }
     } catch (e) {
       console.error('Avatar upload failed', e);
-      alert('Avatar upload failed. Please sign in again if the problem persists.');
+      toast.error('Avatar upload failed. Please sign in again if the problem persists.');
     }
   };
 
@@ -49,10 +50,10 @@ export default function SettingsPage() {
     e.preventDefault();
     try {
       await updateProfile({ firstName, lastName, companyName, companyUrl }).unwrap();
-      alert('Profile updated');
+      toast.success('Profile updated');
     } catch (e) {
       console.error('Update failed', e);
-      alert('Update failed. Please sign in again if the problem persists.');
+      toast.error('Update failed. Please sign in again if the problem persists.');
     }
   };
 

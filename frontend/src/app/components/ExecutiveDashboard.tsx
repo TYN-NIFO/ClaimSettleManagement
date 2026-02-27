@@ -4,16 +4,17 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useGetLeavesQuery, useLogoutMutation, useExecutiveApproveMutation } from '@/lib/api';
+import { useGetClaimsQuery, useGetLeavesQuery, useLogoutMutation } from '@/lib/api';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import authService from '@/lib/authService';
-import { 
-  Plus, 
-  LogOut, 
-  User, 
-  FileText, 
-  DollarSign, 
+import toast from 'react-hot-toast';
+import {
+  Plus,
+  LogOut,
+  User,
+  FileText,
+  DollarSign,
   Clock,
   CheckCircle,
   AlertCircle,
@@ -27,9 +28,7 @@ import {
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
-import ExecutiveApprovalModal from './ExecutiveApprovalModal';
 import ExecutiveLeaveDashboard from './ExecutiveLeaveDashboard';
-import { toast } from 'react-hot-toast';
 import FilterBar, { FilterState } from './FilterBar';
 import { categoryMaster } from '@/lib/categoryMaster';
 
@@ -43,13 +42,10 @@ export default function ExecutiveDashboard() {
   const claims = claimsData?.claims || [];
   const leaves = leavesData?.leaves || [];
   const [logoutMutation] = useLogoutMutation();
-  const [executiveApprove] = useExecutiveApproveMutation();
+
   const router = useRouter();
   const dispatch = useDispatch();
 
-  // Modal state
-  const [selectedClaim, setSelectedClaim] = useState(null);
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
 
   // Handle logout
   const handleLogout = async () => {
@@ -60,6 +56,7 @@ export default function ExecutiveDashboard() {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('Logout failed, redirecting to login...');
       // Force logout even if API call fails
       await authService.logout();
       dispatch(logout());
@@ -67,46 +64,16 @@ export default function ExecutiveDashboard() {
     }
   };
 
-  // Handle executive approval (FINAL APPROVAL)
-  const handleApprovalClick = (claim: any) => {
-    setSelectedClaim(claim);
-    setShowApprovalModal(true);
-  };
-
-  const handleApprovalSubmit = async (claimId: string, isApproved: boolean, notes?: string, rejectionReason?: string) => {
-    try {
-      const action = isApproved ? 'approve' : 'reject';
-      await executiveApprove({
-        id: claimId,
-        action,
-        notes,
-        reason: rejectionReason || notes
-      }).unwrap();
-      
-      toast.success(`Claim ${action}d successfully!`);
-      setShowApprovalModal(false);
-      setSelectedClaim(null);
-    } catch (error: any) {
-      console.error('Executive approval error:', error);
-      toast.error(error?.data?.error || 'Failed to process executive approval');
-    }
-  };
-
-  const handleCloseModal = () => {
-    setShowApprovalModal(false);
-    setSelectedClaim(null);
-  };
-
   // Calculate personal statistics
   const calculatePersonalStats = () => {
     if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
-    
+
     const personalClaims = claims.filter((claim: any) => claim.employeeId?._id === user?._id);
-    
+
     const stats = personalClaims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
       acc.total++;
       acc.totalAmount += claim.grandTotal || 0;
-      
+
       switch (claim.status) {
         case 'submitted':
           acc.pending++;
@@ -120,21 +87,21 @@ export default function ExecutiveDashboard() {
           acc.rejected++;
           break;
       }
-      
+
       return acc;
     }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-    
+
     return stats;
   };
 
   // Calculate organization statistics
   const calculateOrgStats = () => {
     if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
-    
+
     const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
       acc.total++;
       acc.totalAmount += claim.grandTotal || 0;
-      
+
       switch (claim.status) {
         case 'submitted':
           acc.pending++;
@@ -148,10 +115,10 @@ export default function ExecutiveDashboard() {
           acc.rejected++;
           break;
       }
-      
+
       return acc;
     }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-    
+
     return stats;
   };
 
@@ -194,7 +161,7 @@ export default function ExecutiveDashboard() {
       if (orgFilters.endDate) {
         const created = new Date(claim.createdAt);
         const end = new Date(orgFilters.endDate);
-        end.setHours(23,59,59,999);
+        end.setHours(23, 59, 59, 999);
         if (isFinite(created.getTime()) && created > end) return false;
       }
 
@@ -226,7 +193,7 @@ export default function ExecutiveDashboard() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => setShowClaimForm(true)}
@@ -235,7 +202,7 @@ export default function ExecutiveDashboard() {
                 <Plus className="h-4 w-4 mr-2" />
                 New Claim
               </button>
-              
+
               <button
                 onClick={() => router.push('/submit-leave')}
                 className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
@@ -243,7 +210,7 @@ export default function ExecutiveDashboard() {
                 <Clock className="h-4 w-4 mr-2" />
                 Submit Leave
               </button>
-              
+
               <button
                 onClick={handleLogout}
                 className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -271,31 +238,28 @@ export default function ExecutiveDashboard() {
                 <nav className="-mb-px flex space-x-8">
                   <button
                     onClick={() => setActiveTab('personal')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'personal'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'personal'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
                   >
                     Personal View
                   </button>
                   <button
                     onClick={() => setActiveTab('organization')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'organization'
-                        ? 'border-purple-500 text-purple-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'organization'
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
                   >
                     Organization View
                   </button>
                   <button
                     onClick={() => setActiveTab('leave-dashboard')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'leave-dashboard'
-                        ? 'border-green-500 text-green-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'leave-dashboard'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
                   >
                     Leave Dashboard
                   </button>
@@ -377,7 +341,7 @@ export default function ExecutiveDashboard() {
                     <h2 className="text-lg font-medium text-gray-900">My Claims</h2>
                     <p className="text-sm text-gray-600">View and manage your expense claims</p>
                   </div>
-                  
+
                   <div className="p-6">
                     {claimsLoading ? (
                       <div className="flex items-center justify-center py-8">
@@ -427,14 +391,13 @@ export default function ExecutiveDashboard() {
                                   ₹{claim.grandTotal?.toLocaleString() || '0'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
                                     claim.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                    claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                    claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
-                                    claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
+                                      claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                        claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
+                                          claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
+                                            'bg-gray-100 text-gray-800'
+                                    }`}>
                                     {claim.status.replace('_', ' ').toUpperCase()}
                                   </span>
                                 </td>
@@ -552,26 +515,26 @@ export default function ExecutiveDashboard() {
                     <div className="flex items-center">
                       <Clock className="h-6 w-6 text-blue-600 mr-2" />
                       <div>
-                        <p className="text-sm font-medium text-blue-600">Ready for Approval</p>
+                        <p className="text-sm font-medium text-blue-600">Pending Financial Review</p>
                         <p className="text-2xl font-bold text-blue-900">
+                          {claims.filter((claim: any) => claim.status === 'submitted').length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
+                      <div>
+                        <p className="text-sm font-medium text-green-600">Pending Payment</p>
+                        <p className="text-2xl font-bold text-green-900">
                           {claims.filter((claim: any) => claim.status === 'finance_approved').length}
                         </p>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div className="flex items-center">
-                      <CheckCircle className="h-6 w-6 text-green-600 mr-2" />
-                      <div>
-                        <p className="text-sm font-medium text-green-600">Executive Approved</p>
-                        <p className="text-2xl font-bold text-green-900">
-                          {claims.filter((claim: any) => claim.status === 'executive_approved').length}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  
+
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                     <div className="flex items-center">
                       <DollarSign className="h-6 w-6 text-purple-600 mr-2" />
@@ -603,7 +566,7 @@ export default function ExecutiveDashboard() {
                       showDateFilter={true}
                     />
                   </div>
-                  
+
                   <div className="p-6">
                     {claimsLoading ? (
                       <div className="flex items-center justify-center py-8">
@@ -658,7 +621,7 @@ export default function ExecutiveDashboard() {
                 </div>
               </>
             ) : activeTab === 'leave-dashboard' ? (
-              <ExecutiveLeaveDashboard 
+              <ExecutiveLeaveDashboard
                 userRole={user?.role || 'executive'}
                 userEmail={user?.email || ''}
               />
@@ -667,14 +630,6 @@ export default function ExecutiveDashboard() {
         )}
       </div>
 
-      {/* Executive Approval Modal */}
-      {showApprovalModal && selectedClaim && (
-        <ExecutiveApprovalModal
-          claim={selectedClaim}
-          onClose={handleCloseModal}
-          onApprove={handleApprovalSubmit}
-        />
-      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useGetLeavesQuery, useGetLeavesByDateRangeQuery, useDeleteLeaveMutation
 import LeaveForm from './LeaveForm';
 import LoadingSpinner from './LoadingSpinner';
 import { Calendar, List, Plus, Edit, Trash2, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const toLocalYmd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -21,7 +22,7 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
   const { user } = useSelector((state: RootState) => state.auth);
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  
+
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -29,9 +30,9 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
   const [editingLeave, setEditingLeave] = useState<any>(null);
 
   // Fetch leaves for list view (month-specific)
-  const { data: monthlyData, isLoading: monthlyLoading, refetch: refetchMonthly } = useGetLeavesQuery({ 
-    year: selectedYear, 
-    month: selectedMonth 
+  const { data: monthlyData, isLoading: monthlyLoading, refetch: refetchMonthly } = useGetLeavesQuery({
+    year: selectedYear,
+    month: selectedMonth
   });
 
   // Fetch leaves for calendar view (month range)
@@ -58,9 +59,11 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
 
     try {
       await deleteLeave(leaveId).unwrap();
+      toast.success('Leave request deleted successfully');
       refetchMonthly();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Delete error:', error);
+      toast.error(error?.data?.error || error?.data?.message || 'Failed to delete leave request');
     }
   };
 
@@ -101,7 +104,7 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
             Manage your leave requests and view your leave calendar
           </p>
         </div>
-        
+
         <div className="mt-4 sm:mt-0 flex items-center space-x-3">
           <button
             onClick={() => setShowForm(true)}
@@ -189,16 +192,15 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setViewMode('calendar')}
-              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'calendar'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
+              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-500 hover:text-gray-700'
+                }`}
             >
               <Calendar className="h-4 w-4 mr-2" />
               Calendar
             </button>
-         
+
           </div>
         </div>
 
@@ -213,7 +215,7 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
               <option key={year} value={year}>{year}</option>
             ))}
           </select>
-          
+
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -230,7 +232,7 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
 
       {/* Content */}
       {viewMode === 'calendar' ? (
-        <EmployeeCalendarView 
+        <EmployeeCalendarView
           year={selectedYear}
           month={selectedMonth}
           leaves={calendarLeaves}
@@ -267,10 +269,10 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
   const lastDay = new Date(year, month, 0);
   const startDate = new Date(firstDay);
   startDate.setDate(startDate.getDate() - firstDay.getDay()); // Start from Sunday
-  
+
   const calendarDays = [];
   const currentDate = new Date(startDate);
-  
+
   while (currentDate <= lastDay || calendarDays.length < 42) { // 6 weeks * 7 days
     calendarDays.push(new Date(currentDate));
     currentDate.setDate(currentDate.getDate() + 1);
@@ -282,7 +284,7 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
       const leaveStart = new Date(leave.startDate);
       const leaveEnd = new Date(leave.endDate);
       const currentDate = new Date(dateStr);
-      
+
       // Check if the current date falls within the leave period (inclusive)
       return currentDate >= leaveStart && currentDate <= leaveEnd;
     });
@@ -329,7 +331,7 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
           </div>
         </div>
       </div>
-      
+
       <div className="px-4 pb-4">
         {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-1">
@@ -339,26 +341,24 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
               {day}
             </div>
           ))}
-          
+
           {/* Calendar Days */}
           {calendarDays.map((date, index) => {
             const isCurrentMonth = date.getMonth() === month - 1;
             const isToday = date.toDateString() === new Date().toDateString();
             const leaveData = getLeaveDataForDate(date);
-            
+
             return (
               <div
                 key={index}
-                className={`min-h-[100px] p-1 border border-gray-200 ${
-                  isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                className={`min-h-[100px] p-1 border border-gray-200 ${isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                  } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
               >
-                <div className={`text-xs p-1 text-right ${
-                  isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                } ${isToday ? 'font-bold' : ''}`}>
+                <div className={`text-xs p-1 text-right ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                  } ${isToday ? 'font-bold' : ''}`}>
                   {date.getDate()}
                 </div>
-                
+
                 {/* Leave Indicators */}
                 <div className="space-y-1">
                   {leaveData.slice(0, 11).map((leave: any, leaveIndex: number) => {
@@ -368,9 +368,8 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
                     return (
                       <div
                         key={leaveIndex}
-                        className={`text-xs p-1 rounded border ${getLeaveTypeColor(leave.leaveType)} ${
-                          isCurrentUser ? 'ring-1 ring-blue-400' : ''
-                        } ${isPending ? 'opacity-60 border-dashed' : ''} ${isRejected ? 'opacity-40 line-through' : ''}`}
+                        className={`text-xs p-1 rounded border ${getLeaveTypeColor(leave.leaveType)} ${isCurrentUser ? 'ring-1 ring-blue-400' : ''
+                          } ${isPending ? 'opacity-60 border-dashed' : ''} ${isRejected ? 'opacity-40 line-through' : ''}`}
                         title={`${leave.employee?.name || leave.employeeEmail} - ${leave.leaveType}${leave.reason ? ` - ${leave.reason}` : ''} (${leave.status})`}
                       >
                         <div className="font-medium truncate flex items-center justify-between">
@@ -392,7 +391,7 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
             );
           })}
         </div>
-        
+
         {/* Legend */}
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap gap-2">
@@ -463,11 +462,11 @@ function EmployeeListView({ year, month, leaves, isLoading, onEdit, onDelete, is
   const formatDateRange = (start: string, end: string) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    
+
     if (startDate.toDateString() === endDate.toDateString()) {
       return formatDate(start);
     }
-    
+
     return `${formatDate(start)} - ${formatDate(end)}`;
   };
 
@@ -561,7 +560,7 @@ function EmployeeListView({ year, month, leaves, isLoading, onEdit, onDelete, is
                       {leave.status}
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center space-x-4 text-sm text-gray-900">
                     <span className="font-medium">
                       {formatDateRange(leave.startDate, leave.endDate)}
@@ -575,19 +574,19 @@ function EmployeeListView({ year, month, leaves, isLoading, onEdit, onDelete, is
                       Duration: {leave.durationInDays} day{leave.durationInDays > 1 ? 's' : ''}
                     </span>
                   </div>
-                  
+
                   {leave.reason && (
                     <p className="mt-1 text-sm text-gray-600">
                       Reason: {leave.reason}
                     </p>
                   )}
-                  
+
                   {leave.approval?.notes && leave.status !== 'submitted' && (
                     <p className="mt-1 text-sm text-gray-600">
                       {leave.status === 'approved' ? 'Approval notes' : 'Rejection reason'}: {leave.approval.notes}
                     </p>
                   )}
-                  
+
                   {leave.approval?.approvedAt && (
                     <p className="mt-1 text-xs text-gray-500">
                       {leave.status === 'approved' ? 'Approved' : 'Rejected'} on{' '}
@@ -599,7 +598,7 @@ function EmployeeListView({ year, month, leaves, isLoading, onEdit, onDelete, is
                     </p>
                   )}
                 </div>
-                
+
                 {leave.status === 'submitted' && (
                   <div className="flex-shrink-0 flex space-x-2">
                     <button

@@ -5,7 +5,7 @@ import EmployeeDashboard from '../components/EmployeeDashboard';
 
 export default function EmployeePage() {
   return (
-    <AuthWrapper requiredRole="employee">
+    <AuthWrapper allowedRoles={['employee', 'supervisor']}>
       <EmployeeDashboard />
     </AuthWrapper>
   );

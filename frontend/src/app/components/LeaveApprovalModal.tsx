@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useApproveLeaveMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 interface LeaveApprovalModalProps {
   leave: any;
@@ -25,7 +26,7 @@ export default function LeaveApprovalModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       await approveLeave({
         id: leave._id,
@@ -33,11 +34,18 @@ export default function LeaveApprovalModal({
         notes,
         rejectionReason: action === 'reject' ? rejectionReason : ''
       }).unwrap();
-      
+
       if (onSuccess) onSuccess();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Approval error:', error);
+      let errorMessage = "Failed to process leave approval";
+      if (error?.data?.error) errorMessage = error.data.error;
+      else if (error?.data?.message) errorMessage = error.data.message;
+      else if (error?.message) errorMessage = error.message;
+      else if (typeof error === "string") errorMessage = error;
+
+      toast.error(errorMessage);
     }
   };
 
@@ -53,11 +61,11 @@ export default function LeaveApprovalModal({
     if (leave.type === 'Permission' && leave.hours) {
       return `${leave.hours} hours`;
     }
-    
+
     const start = new Date(leave.startDate);
     const end = new Date(leave.endDate);
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    
+
     return `${days} day${days > 1 ? 's' : ''}`;
   };
 
@@ -89,47 +97,46 @@ export default function LeaveApprovalModal({
                 <p className="text-sm text-gray-900">{leave.employeeId?.name}</p>
                 <p className="text-sm text-gray-600">{leave.employeeId?.email}</p>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Department</p>
                 <p className="text-sm text-gray-900">{leave.employeeId?.department || 'N/A'}</p>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Leave Type</p>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  leave.type === 'Planned Leave' ? 'bg-green-100 text-green-800' :
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${leave.type === 'Planned Leave' ? 'bg-green-100 text-green-800' :
                   leave.type === 'Unplanned Leave' ? 'bg-red-100 text-red-800' :
-                  leave.type === 'WFH' ? 'bg-blue-100 text-blue-800' :
-                  leave.type === 'Permission' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
+                    leave.type === 'WFH' ? 'bg-blue-100 text-blue-800' :
+                      leave.type === 'Permission' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-gray-100 text-gray-800'
+                  }`}>
                   {leave.type}
                 </span>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Duration</p>
                 <p className="text-sm text-gray-900">{getDuration()}</p>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Start Date</p>
                 <p className="text-sm text-gray-900">{formatDate(leave.startDate)}</p>
               </div>
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">End Date</p>
                 <p className="text-sm text-gray-900">{formatDate(leave.endDate)}</p>
               </div>
-              
+
               {leave.reason && (
                 <div className="md:col-span-2">
                   <p className="text-sm font-medium text-gray-500">Reason</p>
                   <p className="text-sm text-gray-900">{leave.reason}</p>
                 </div>
               )}
-              
+
               <div>
                 <p className="text-sm font-medium text-gray-500">Submitted On</p>
                 <p className="text-sm text-gray-900">{formatDate(leave.createdAt)}</p>
@@ -216,11 +223,10 @@ export default function LeaveApprovalModal({
               <button
                 type="submit"
                 disabled={isLoading || (action === 'reject' && !rejectionReason.trim())}
-                className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  action === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                    : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
-                }`}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${action === 'approve'
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                  : 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+                  }`}
               >
                 {isLoading ? (
                   <span className="flex items-center">

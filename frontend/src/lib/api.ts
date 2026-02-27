@@ -150,14 +150,14 @@ export const api = createApi({
         const formData = new FormData();
         formData.append('claimData', JSON.stringify(claimData));
         formData.append('fileMapping', JSON.stringify(fileMapping || {}));
-        
+
         // Add files to form data
         if (files && files.length > 0) {
           files.forEach((file: File) => {
             formData.append('files', file);
           });
         }
-        
+
         return {
           url: '/claims',
           method: 'POST',
@@ -178,7 +178,7 @@ export const api = createApi({
       }) => {
         const formData = new FormData();
         formData.append('file', file);
-        
+
         return {
           url: `/claims/${claimId}/upload`,
           method: 'POST',
@@ -227,7 +227,7 @@ export const api = createApi({
           const formData = new FormData();
           formData.append('claimData', JSON.stringify(claimData || claim));
           formData.append('fileMapping', JSON.stringify(fileMapping || {}));
-          
+
           // Add files to form data
           files.forEach((file: File) => {
             // Only add new files (not existing ones)
@@ -235,7 +235,7 @@ export const api = createApi({
               formData.append('files', file);
             }
           });
-          
+
           return {
             url: `/claims/${id}`,
             method: 'PATCH',
@@ -293,11 +293,21 @@ export const api = createApi({
       ],
     }),
     markPaid: builder.mutation({
-      query: ({ id, channel, reference }) => ({
-        url: `/claims/${id}/mark-paid`,
-        method: 'POST',
-        body: { channel, reference },
-      }),
+      query: ({ id, channel, reference, file }) => {
+        const formData = new FormData();
+        formData.append('channel', channel);
+        if (reference) formData.append('reference', reference);
+        if (file) formData.append('file', file);
+        return {
+          url: `/claims/${id}/mark-paid`,
+          method: 'POST',
+          body: formData,
+          prepareHeaders: (headers: Headers) => {
+            headers.delete('Content-Type');
+            return headers;
+          },
+        };
+      },
       invalidatesTags: (result, error, { id }) => [
         { type: 'Claims', id },
         'Claims',
@@ -491,16 +501,16 @@ export const {
   useDeactivateUserMutation,
   useResetUserPasswordMutation,
   useDeleteUserMutation,
-      // Leaves
-    useCreateLeaveMutation,
-    useCreateBulkLeavesMutation,
-    useGetLeavesQuery,
-    useGetPendingLeavesQuery,
-    useGetLeaveAnalyticsQuery,
-    useGetTodayLeavesQuery,
-    useGetLeavesByDateRangeQuery,
-    useUpdateLeaveMutation,
-    useApproveLeaveMutation,
-    useDeleteLeaveMutation,
-    useGetEmployeeNamesQuery,
+  // Leaves
+  useCreateLeaveMutation,
+  useCreateBulkLeavesMutation,
+  useGetLeavesQuery,
+  useGetPendingLeavesQuery,
+  useGetLeaveAnalyticsQuery,
+  useGetTodayLeavesQuery,
+  useGetLeavesByDateRangeQuery,
+  useUpdateLeaveMutation,
+  useApproveLeaveMutation,
+  useDeleteLeaveMutation,
+  useGetEmployeeNamesQuery,
 } = api;

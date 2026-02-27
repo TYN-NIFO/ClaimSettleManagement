@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import ExcelJS from "exceljs";
 import { auth } from "../middleware/auth.js";
 import { rbac, canAccessClaim } from "../middleware/rbac.js";
 import Claim from "../models/Claim.js";
@@ -15,7 +16,6 @@ import { createAuditLog } from "../controllers/authController.js";
 import {
   createClaim,
   financeApprove,
-  executiveApprove,
   markAsPaid,
 } from "../controllers/claimController.js";
 
@@ -342,7 +342,6 @@ router.get("/", auth, async (req, res) => {
     const claims = await Claim.find(filter)
       .populate("employeeId", "name email")
       .populate("financeApproval.approvedBy", "name email")
-      .populate("executiveApproval.approvedBy", "name email")
       .populate("payment.paidBy", "name email")
       .sort({ createdAt: -1 })
       .limit(limit * 1)
@@ -351,8 +350,7 @@ router.get("/", auth, async (req, res) => {
     console.log("Claims found:", claims.length);
     claims.forEach((claim, index) => {
       console.log(
-        `${index + 1}. Claim ID: ${claim._id}, Employee: ${
-          claim.employeeId?.name
+        `${index + 1}. Claim ID: ${claim._id}, Employee: ${claim.employeeId?.name
         } (${claim.employeeId?.email}), Status: ${claim.status}`
       );
     });
@@ -374,10 +372,82 @@ router.get("/", auth, async (req, res) => {
 });
 
 // For excel download
+router.get("/export", auth, async (req, res) => {
+  try {
+    const { status, category } = req.query;
+    const user = req.user;
+    const filter = {};
 
+    console.log("Exporting claims for user:", user.email, "with params:", req.query);
 
+    // Apply status and category filters
+    if (status) filter.status = status;
+    if (category) filter.category = category;
 
-//
+    // Role-based filtering
+    if (user.role === "executive" || user.role === "admin") {
+      // no filter
+    } else if (user.role === "employee") {
+      filter.employeeId = user._id;
+    } else if (user.role === "finance_manager") {
+      // no filter
+    }
+
+    const claims = await Claim.find(filter)
+      .populate("employeeId", "name email department")
+      .populate("financeApproval.approvedBy", "name email")
+      .populate("payment.paidBy", "name email")
+      .sort({ createdAt: -1 });
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Claims");
+
+    sheet.columns = [
+      { header: "Claim ID", key: "claimId", width: 25 },
+      { header: "Date", key: "createdAt", width: 15 },
+      { header: "Employee", key: "employee", width: 25 },
+      { header: "Department", key: "department", width: 20 },
+      { header: "Category", key: "category", width: 20 },
+      { header: "Business Unit", key: "businessUnit", width: 20 },
+      { header: "Status", key: "status", width: 20 },
+      { header: "Total Amount", key: "grandTotal", width: 15 },
+      { header: "Net Payable", key: "netPayable", width: 15 },
+      { header: "Finance Approved By", key: "financeApprovedBy", width: 25 },
+      { header: "Paid By", key: "paidBy", width: 25 },
+    ];
+
+    claims.forEach((claim) => {
+      sheet.addRow({
+        claimId: claim.claimId || claim._id.toString(),
+        createdAt: new Date(claim.createdAt).toLocaleDateString(),
+        employee: claim.employeeId?.name || "Unknown",
+        department: claim.employeeId?.department || "Unknown",
+        category: claim.category,
+        businessUnit: claim.businessUnit,
+        status: claim.status,
+        grandTotal: claim.grandTotal || 0,
+        netPayable: claim.netPayable || 0,
+        financeApprovedBy: claim.financeApproval?.approvedBy?.name || "",
+        paidBy: claim.payment?.paidBy?.name || "",
+      });
+    });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=claims_export.xlsx"
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error("Export claims error:", error);
+    res.status(500).json({ error: "Failed to export claims" });
+  }
+});
 
 /**
  * @swagger
@@ -535,9 +605,7 @@ router.get(
     try {
       const claim = await Claim.findById(req.params.id)
         .populate("employeeId", "name email")
-
         .populate("financeApproval.approvedBy", "name email")
-        .populate("executiveApproval.approvedBy", "name email")
         .populate("payment.paidBy", "name email");
 
       if (!claim) {
@@ -690,10 +758,7 @@ router.patch(
       // - Admin
       // - Finance manager or Executive (full override)
       // - Owner before finance approval (submitted/rejected)
-      const isExecutive =
-        user.role === "executive" ||
-        user.email === "velan@theyellow.network" ||
-        user.email === "gg@theyellownetwork.com";
+      const isExecutive = user.role === "executive";
       const canEdit =
         user.role === "admin" ||
         user.role === "finance_manager" ||
@@ -793,7 +858,6 @@ router.patch(
           updateData.status === "submitted"
         ) {
           updateData.financeApproval = { status: "pending" };
-          updateData.executiveApproval = { status: "pending" };
         }
 
         // If finance manager is updating status to finance_approved
@@ -1036,116 +1100,6 @@ router.post(
 
 /**
  * @swagger
- * /claims/{id}/executive-approve:
- *   post:
- *     tags: [Claim Approval]
- *     summary: Executive approval of claim
- *     description: Executive (CEO/CTO) final approval/rejection of a claim
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Claim ID
- *         example: "507f1f77bcf86cd799439011"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [action]
- *             properties:
- *               action:
- *                 type: string
- *                 enum: [approve, reject]
- *                 description: Executive approval action
- *                 example: "approve"
- *               reason:
- *                 type: string
- *                 description: Reason for rejection (required if rejecting)
- *                 example: "Budget constraints"
- *               notes:
- *                 type: string
- *                 description: Additional notes
- *                 example: "Final approval for payment"
- *     responses:
- *       200:
- *         description: Executive approval processed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Claim executive approved successfully"
- *                 claim:
- *                   $ref: '#/components/schemas/Claim'
- *       400:
- *         description: Invalid action or missing reason
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       403:
- *         description: Forbidden - Executive access required
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Claim not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post(
-  "/:id/executive-approve",
-  auth,
-  canAccessClaim,
-  async (req, res) => {
-    try {
-      // The canAccessClaim middleware already sets req.claim, so we don't need to fetch it again
-      if (!req.claim) {
-        return res.status(404).json({ error: "Claim not found" });
-      }
-
-      // Call the controller function
-      await executiveApprove(req, res);
-    } catch (error) {
-      console.error("Executive approve claim error:", error);
-      res
-        .status(500)
-        .json({
-          error: "Failed to approve claim",
-          details: error?.message || "Unknown error",
-        });
-    }
-  }
-);
-
-/**
- * @swagger
  * /claims/{id}/mark-paid:
  *   post:
  *     tags: [Claim Payment]
@@ -1176,6 +1130,10 @@ router.post(
  *                 type: string
  *                 description: Payment reference number
  *                 example: "TXN123456789"
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *                 description: Mandatory payment proof document
  *     responses:
  *       200:
  *         description: Claim marked as paid successfully
@@ -1227,12 +1185,32 @@ router.post(
   "/:id/mark-paid",
   auth,
   rbac(["finance_manager", "admin"]),
+  upload.single("file"),
   async (req, res) => {
     try {
       // Set the claim in req object for the controller
       req.claim = await Claim.findById(req.params.id);
       if (!req.claim) {
         return res.status(404).json({ error: "Claim not found" });
+      }
+
+      // Process file if provided
+      if (req.file) {
+        // Store file using storage service (returns public URL)
+        const result = await storageService.save(req.file);
+        const fileKey = result.storageKey;
+
+        const attachment = {
+          fileId: fileKey,
+          name: req.file.originalname,
+          size: req.file.size,
+          mime: req.file.mimetype,
+          storageKey: fileKey,
+          url: result.url, // Public S3 URL
+          label: "payment_proof",
+        };
+
+        req.claim.attachments.push(attachment);
       }
 
       // Call the controller function

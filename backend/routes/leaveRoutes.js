@@ -13,6 +13,9 @@ import {
 } from '../controllers/leaveController.js';
 import { auth } from '../middleware/auth.js';
 import { validateRequest } from '../middleware/validation.js';
+import { rbac } from '../middleware/rbac.js';
+
+const requireExecutive = rbac(['executive']);
 
 const router = express.Router();
 
@@ -172,10 +175,10 @@ router.post('/', validateRequest(createLeaveSchema), createLeave);
 router.get('/', validateRequest(querySchema), getUserLeaves);
 
 // GET /api/leaves/pending - Get pending leave requests (CTO/CEO only)
-router.get('/pending', validateRequest(querySchema), getPendingLeaves);
+router.get('/pending', requireExecutive, validateRequest(querySchema), getPendingLeaves);
 
 // GET /api/leaves/analytics - Get organization-wide leave analytics (CTO/CEO only)
-router.get('/analytics', validateRequest(querySchema), getLeaveAnalytics);
+router.get('/analytics', requireExecutive, validateRequest(querySchema), getLeaveAnalytics);
 
 // GET /api/leaves/today - Get today's leave status
 router.get('/today', getTodayLeaves);
@@ -184,13 +187,13 @@ router.get('/today', getTodayLeaves);
 router.get('/by-date-range', getLeavesByDateRange);
 
 // POST /api/leaves/bulk - Bulk upload leave data (CTO/CEO only)
-router.post('/bulk', createBulkLeaves);
+router.post('/bulk', requireExecutive, createBulkLeaves);
 
 // PUT /api/leaves/:leaveId - Update a leave request (only if submitted)
 router.put('/:leaveId', validateRequest(updateLeaveSchema), updateLeave);
 
 // POST /api/leaves/:leaveId/approve - Approve or reject a leave request (CTO/CEO only)
-router.post('/:leaveId/approve', validateRequest(approveLeaveSchema), approveLeave);
+router.post('/:leaveId/approve', requireExecutive, validateRequest(approveLeaveSchema), approveLeave);
 
 // DELETE /api/leaves/:leaveId - Delete a leave request (only if submitted)
 router.delete('/:leaveId', deleteLeave);

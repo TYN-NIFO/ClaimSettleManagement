@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useGetLeavesQuery, useDeleteLeaveMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 import LeaveForm from './LeaveForm';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -12,11 +13,11 @@ interface LeaveMonthlyViewProps {
   isCurrentUser?: boolean;
 }
 
-export default function LeaveMonthlyView({ 
-  year = new Date().getFullYear(), 
+export default function LeaveMonthlyView({
+  year = new Date().getFullYear(),
   month = new Date().getMonth() + 1,
   userId,
-  isCurrentUser = true 
+  isCurrentUser = true
 }: LeaveMonthlyViewProps) {
   const { data, isLoading, error, refetch } = useGetLeavesQuery({ year, month });
   const [deleteLeave, { isLoading: isDeleting }] = useDeleteLeaveMutation();
@@ -32,9 +33,11 @@ export default function LeaveMonthlyView({
 
     try {
       await deleteLeave(leaveId).unwrap();
+      toast.success('Leave request deleted successfully');
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Delete error:', error);
+      toast.error(error?.data?.error || error?.data?.message || 'Failed to delete leave request');
     }
   };
 
@@ -64,11 +67,11 @@ export default function LeaveMonthlyView({
   const formatDateRange = (start: string, end: string) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
-    
+
     if (startDate.toDateString() === endDate.toDateString()) {
       return formatDate(start);
     }
-    
+
     return `${formatDate(start)} - ${formatDate(end)}`;
   };
 
@@ -291,7 +294,7 @@ export default function LeaveMonthlyView({
                         {leave.status}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4 text-sm text-gray-900">
                       <span className="font-medium">
                         {formatDateRange(leave.startDate, leave.endDate)}
@@ -305,19 +308,19 @@ export default function LeaveMonthlyView({
                         Duration: {leave.durationInDays} day{leave.durationInDays > 1 ? 's' : ''}
                       </span>
                     </div>
-                    
+
                     {leave.reason && (
                       <p className="mt-1 text-sm text-gray-600">
                         Reason: {leave.reason}
                       </p>
                     )}
-                    
+
                     {leave.approval?.notes && leave.status !== 'submitted' && (
                       <p className="mt-1 text-sm text-gray-600">
                         {leave.status === 'approved' ? 'Approval notes' : 'Rejection reason'}: {leave.approval.notes}
                       </p>
                     )}
-                    
+
                     {leave.approval?.approvedAt && (
                       <p className="mt-1 text-xs text-gray-500">
                         {leave.status === 'approved' ? 'Approved' : 'Rejected'} on{' '}
@@ -329,7 +332,7 @@ export default function LeaveMonthlyView({
                       </p>
                     )}
                   </div>
-                  
+
                   {isCurrentUser && leave.status === 'submitted' && (
                     <div className="flex-shrink-0 flex space-x-2">
                       <button

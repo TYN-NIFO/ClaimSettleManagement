@@ -4,16 +4,14 @@ import { useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
 import { useGetLeavesQuery, useApproveLeaveMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 
-const APPROVER_EMAILS = [
-  'gg@theyellownetwork.com',
-  'velan@theyellow.network',
-];
+const APPROVER_ROLES = ['executive', 'supervisor', 'admin'];
 
 export default function LeaveApprovals() {
   const { user } = useSelector((state: RootState) => state.auth);
-  const isApprover = useMemo(() => !!user?.email && APPROVER_EMAILS.includes(user.email), [user?.email]);
-  const { data, isLoading, refetch } = useGetLeavesQuery({ status: 'submitted', limit: 100 });
+  const isApprover = useMemo(() => !!user?.role && APPROVER_ROLES.includes(user.role), [user?.role]);
+  const { data, isLoading, error: fetchError, refetch } = useGetLeavesQuery({ status: 'submitted', limit: 100 });
   const leaves = data?.leaves || [];
   const [approveLeave, { isLoading: approving }] = useApproveLeaveMutation();
   const [notesById, setNotesById] = useState<Record<string, string>>({});
@@ -27,8 +25,13 @@ export default function LeaveApprovals() {
   }
 
   const handleAction = async (id: string, action: 'approve' | 'reject') => {
-    await approveLeave({ id, action, notes: notesById[id] || '' }).unwrap();
-    refetch();
+    try {
+      await approveLeave({ id, action, notes: notesById[id] || '' }).unwrap();
+      toast.success(`Leave ${action === 'approve' ? 'approved' : 'rejected'} successfully`);
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.data?.message || `Failed to ${action} leave request`);
+    }
   };
 
   return (
@@ -40,6 +43,14 @@ export default function LeaveApprovals() {
       <div className="p-6">
         {isLoading ? (
           <div className="text-gray-500">Loading...</div>
+        ) : fetchError ? (
+          <div className="text-center py-8">
+            <p className="text-red-600 font-medium mb-2">Failed to load leave requests</p>
+            <p className="text-sm text-gray-500 mb-4">There was a server error. Please try again.</p>
+            <button onClick={() => refetch()} className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+              Retry
+            </button>
+          </div>
         ) : leaves.length ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -77,14 +88,14 @@ export default function LeaveApprovals() {
                       <button
                         onClick={() => handleAction(lv._id, 'approve')}
                         disabled={approving}
-                        className="bg-green-600 text-white rounded-md px-3 py-1 hover:bg-green-700"
+                        className="bg-green-600 text-white rounded-md px-3 py-1 hover:bg-green-700 disabled:opacity-50"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleAction(lv._id, 'reject')}
                         disabled={approving}
-                        className="bg-red-600 text-white rounded-md px-3 py-1 hover:bg-red-700"
+                        className="bg-red-600 text-white rounded-md px-3 py-1 hover:bg-red-700 disabled:opacity-50"
                       >
                         Reject
                       </button>
@@ -101,5 +112,3 @@ export default function LeaveApprovals() {
     </div>
   );
 }
-
-

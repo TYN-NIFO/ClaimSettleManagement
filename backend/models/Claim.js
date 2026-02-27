@@ -35,58 +35,58 @@ const ClaimSchema = new mongoose.Schema({
     unique: true,
     required: false  // Auto-generated in pre-save hook
   },
-  employeeId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  employeeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  businessUnit: { 
-    type: String, 
-    enum: ['Alliance', 'Coinnovation', 'General'], 
-    required: true 
+  businessUnit: {
+    type: String,
+    enum: ['Alliance', 'Coinnovation', 'General'],
+    required: true
   },
-  category: { 
-    type: String, 
-    required: true 
+  category: {
+    type: String,
+    required: true
   },
-  advances: { 
-    type: [AdvanceSchema], 
-    default: [] 
+  advances: {
+    type: [AdvanceSchema],
+    default: []
   },
-  lineItems: { 
-    type: [LineItemSchema], 
-    default: [] 
+  lineItems: {
+    type: [LineItemSchema],
+    default: []
   },
-  totalsByHead: { 
-    type: mongoose.Schema.Types.Mixed, 
-    default: {} 
+  totalsByHead: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
   grandTotal: Number,
   netPayable: Number,
-  status: { 
-    type: String, 
-    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'executive_approved', 'paid', 'done'], 
-    default: 'submitted' 
+  status: {
+    type: String,
+    enum: ['submitted', 'approved', 'rejected', 'finance_approved', 'paid', 'done'],
+    default: 'submitted'
   },
   policyVersion: String,
   violations: [{
     code: String,
     message: String,
-    level: { 
-      type: String, 
-      enum: ['warn', 'error'] 
+    level: {
+      type: String,
+      enum: ['warn', 'error']
     }
   }],
-  attachments: { 
-    type: [AttachmentSchema], 
-    default: [] 
+  attachments: {
+    type: [AttachmentSchema],
+    default: []
   },
-  
+
   // Approval/Rejection tracking
   supervisorApproval: {
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -102,14 +102,7 @@ const ClaimSchema = new mongoose.Schema({
     reason: String,
     notes: String
   },
-  executiveApproval: {
-    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    approvedAt: Date,
-    status: { type: String, enum: ['approved', 'rejected', 'pending'], default: 'pending' },
-    reason: String,
-    notes: String
-  },
-  
+
   // Payment tracking
   payment: {
     paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -117,8 +110,8 @@ const ClaimSchema = new mongoose.Schema({
     channel: String,
     reference: String
   }
-}, { 
-  timestamps: true 
+}, {
+  timestamps: true
 });
 
 // Indexes for efficient queries
@@ -127,7 +120,7 @@ ClaimSchema.index({ status: 1 });
 ClaimSchema.index({ claimId: 1 });
 
 // Pre-save middleware to generate claimId
-ClaimSchema.pre('save', async function(next) {
+ClaimSchema.pre('save', async function (next) {
   if (!this.claimId) {
     try {
       const seq = await getNextClaimSequence();
@@ -138,7 +131,7 @@ ClaimSchema.pre('save', async function(next) {
       return next(new Error('Failed to generate claim ID'));
     }
   }
-  
+
   next();
 });
 

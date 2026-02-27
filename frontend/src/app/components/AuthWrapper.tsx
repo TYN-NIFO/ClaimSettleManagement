@@ -9,11 +9,11 @@ import authService from '@/lib/authService';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
-  requiredRole?: 'employee' | 'finance_manager' | 'admin';
+  allowedRoles?: string[];
   redirectTo?: string;
 }
 
-const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrapperProps) => {
+const AuthWrapper = ({ children, allowedRoles, redirectTo = '/login' }: AuthWrapperProps) => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { isAuthenticated, user, isLoading, isInitialized: authInitialized } = useSelector((state: RootState) => state.auth);
@@ -34,19 +34,9 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
       return;
     }
 
-    if (requiredRole && user) {
-      // Check role-based access
-      const userRole = user.role;
-      const roleHierarchy = {
-        employee: 1,
-        finance_manager: 2,
-        admin: 3
-      };
-
-      const userRoleLevel = roleHierarchy[userRole as keyof typeof roleHierarchy] || 0;
-      const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
-
-      if (userRoleLevel < requiredRoleLevel) {
+    if (allowedRoles && user) {
+      // Check role-based access exact match
+      if (!allowedRoles.includes(user.role)) {
         // User doesn't have required role, redirect to unauthorized page
         router.push('/unauthorized');
         return;
@@ -58,7 +48,7 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
     if (token && !authService.isTokenExpired(token)) {
       authService.setupAutoRefresh();
     }
-  }, [isAuthenticated, user, componentInitialized, authInitialized, requiredRole, router, redirectTo]);
+  }, [isAuthenticated, user, componentInitialized, authInitialized, allowedRoles, router, redirectTo]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -99,23 +89,14 @@ const AuthWrapper = ({ children, requiredRole, redirectTo = '/login' }: AuthWrap
   }
 
   // Show unauthorized message if role is insufficient
-  if (requiredRole && user) {
-    const roleHierarchy = {
-      employee: 1,
-      finance_manager: 2,
-      admin: 3
-    };
-
-    const userRoleLevel = roleHierarchy[user.role as keyof typeof roleHierarchy] || 0;
-    const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
-
-    if (userRoleLevel < requiredRoleLevel) {
+  if (allowedRoles && user) {
+    if (!allowedRoles.includes(user.role)) {
       return (
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
             <p className="text-gray-600 mb-4">
-              You don&apos;t have permission to access this page. Required role: {requiredRole}
+              You don&apos;t have permission to access this page. Required role: {allowedRoles.join(', ')}
             </p>
             <button
               onClick={handleLogout}

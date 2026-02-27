@@ -6,22 +6,23 @@ import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
 import { useGetClaimsQuery, useGetClaimStatsQuery, useFinanceApproveMutation, useMarkPaidMutation } from '@/lib/api';
 import authService from '@/lib/authService';
-import { 
-  LogOut, 
-  User, 
-  FileText, 
-  DollarSign, 
+import toast from 'react-hot-toast';
+import {
+  LogOut,
+  User,
+  FileText,
+  DollarSign,
   Clock,
   CheckCircle,
   CreditCard,
   TrendingUp,
   Plus,
-  Calendar
+  Calendar,
+  Download
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 import FinanceApprovalModal from './FinanceApprovalModal';
 import PaymentModal from './PaymentModal';
-import { toast } from 'react-hot-toast';
 import FilterBar, { FilterState } from './FilterBar';
 import { categoryMaster } from '@/lib/categoryMaster';
 
@@ -74,7 +75,7 @@ export default function FinanceDashboard() {
         const created = new Date(claim.createdAt);
         const end = new Date(filters.endDate);
         // include end date day
-        end.setHours(23,59,59,999);
+        end.setHours(23, 59, 59, 999);
         if (isFinite(created.getTime()) && created > end) return false;
       }
 
@@ -94,6 +95,7 @@ export default function FinanceDashboard() {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('Logout failed, redirecting to login...');
       router.push('/login');
     }
   };
@@ -118,7 +120,7 @@ export default function FinanceDashboard() {
         notes,
         reason: rejectionReason || notes
       }).unwrap();
-      
+
       toast.success(`Claim ${action}d successfully!`);
       setShowApprovalModal(false);
       setSelectedClaim(null);
@@ -135,14 +137,15 @@ export default function FinanceDashboard() {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSubmit = async (claimId: string, channel: string, reference?: string) => {
+  const handlePaymentSubmit = async (claimId: string, channel: string, reference: string | undefined, file: File | null) => {
     try {
       await markPaid({
         id: claimId,
         channel,
+        file,
         reference
       }).unwrap();
-      
+
       toast.success('Claim marked as paid successfully!');
       setShowPaymentModal(false);
       setSelectedClaim(null);
@@ -158,6 +161,39 @@ export default function FinanceDashboard() {
     setSelectedClaim(null);
   };
 
+  const handleDownloadCSV = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.category) params.append('category', filters.category);
+
+      const token = authService.getAccessToken();
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/claims/export?${params.toString()}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `claims_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Claims exported successfully');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download claims');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -171,6 +207,13 @@ export default function FinanceDashboard() {
               </h1>
             </div>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={handleDownloadCSV}
+                className="flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Export
+              </button>
               <button
                 onClick={handleSubmitClaim}
                 className="flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-md hover:bg-purple-700"
@@ -205,11 +248,10 @@ export default function FinanceDashboard() {
               <button
                 key={tab.key}
                 onClick={() => setCurrentView(tab.key)}
-                className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  currentView === tab.key
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${currentView === tab.key
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 <tab.icon className="h-4 w-4" />
                 <span>{tab.label}</span>
@@ -267,7 +309,7 @@ export default function FinanceDashboard() {
                       <div className="ml-4">
                         <p className="text-sm font-medium text-gray-600">Pending Payment</p>
                         <p className="text-2xl font-bold text-gray-900">
-                          {stats.statusStats?.find((s: { _id: string }) => s._id === 'executive_approved')?.count || 0}
+                          {stats.statusStats?.find((s: { _id: string }) => s._id === 'finance_approved')?.count || 0}
                         </p>
                       </div>
                     </div>
@@ -305,8 +347,8 @@ export default function FinanceDashboard() {
                     <p className="text-red-600">Error loading claims. Please try again.</p>
                   </div>
                 ) : (
-                  <ClaimList 
-                    claims={filteredClaims || []} 
+                  <ClaimList
+                    claims={filteredClaims || []}
                     onApprovalClick={handleApprovalClick}
                     onPaymentClick={handlePaymentClick}
                     showApprovalButtons={true}

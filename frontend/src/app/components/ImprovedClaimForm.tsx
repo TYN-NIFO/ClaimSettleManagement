@@ -316,12 +316,10 @@ export default function ImprovedClaimForm({
 
     const message =
       validFiles.length === 1
-        ? `✅ File added to line item ${lineItemIndex + 1}: "${
-            validFiles[0].name
-          }" (${(validFiles[0].size / 1024 / 1024).toFixed(2)}MB)`
-        : `✅ ${validFiles.length} files added to line item ${
-            lineItemIndex + 1
-          }`;
+        ? `✅ File added to line item ${lineItemIndex + 1}: "${validFiles[0].name
+        }" (${(validFiles[0].size / 1024 / 1024).toFixed(2)}MB)`
+        : `✅ ${validFiles.length} files added to line item ${lineItemIndex + 1
+        }`;
 
     toast.success(message);
   };
@@ -467,16 +465,13 @@ export default function ImprovedClaimForm({
       const newFileCount = newFiles.length;
       const existingFileCount = allFiles.length - newFileCount;
       const successMessage = isEditing
-        ? `Claim updated successfully!${
-            newFileCount > 0 ? ` ${newFileCount} file(s) replaced.` : ""
-          }${
-            existingFileCount > 0 && newFileCount === 0
-              ? ` ${existingFileCount} existing file(s) preserved.`
-              : ""
-          }`
-        : `Claim submitted successfully!${
-            newFileCount > 0 ? ` ${newFileCount} file(s) attached.` : ""
-          }`;
+        ? `Claim updated successfully!${newFileCount > 0 ? ` ${newFileCount} file(s) replaced.` : ""
+        }${existingFileCount > 0 && newFileCount === 0
+          ? ` ${existingFileCount} existing file(s) preserved.`
+          : ""
+        }`
+        : `Claim submitted successfully!${newFileCount > 0 ? ` ${newFileCount} file(s) attached.` : ""
+        }`;
 
       toast.success(successMessage);
 
@@ -488,10 +483,19 @@ export default function ImprovedClaimForm({
       onClose();
     } catch (error: any) {
       console.error("Claim submission error:", error);
+
+      if (error?.data?.violations && Array.isArray(error.data.violations) && error.data.violations.length > 0) {
+        // Show specific policy violations instead of generic top-level error
+        toast.error(`Please fix the following issues: ${error.data.violations.map((v: any) => v.message).join(' | ')}`);
+        return;
+      }
+
       let errorMessage = "Failed to submit claim";
 
       if (error?.data?.error) {
         errorMessage = error.data.error;
+      } else if (error?.data?.message) {
+        errorMessage = error.data.message;
       } else if (error?.message) {
         errorMessage = error.message;
       } else if (typeof error === "string") {
@@ -761,8 +765,8 @@ export default function ImprovedClaimForm({
                   ? "Updating..."
                   : "Submitting..."
                 : isEditing
-                ? "Update Claim"
-                : "Submit Claim"}
+                  ? "Update Claim"
+                  : "Submit Claim"}
             </button>
           </div>
 
@@ -1062,21 +1066,20 @@ function LineItemForm({
           />
           <label
             htmlFor={`file-upload-${index}`}
-            className={`flex flex-col items-center px-3 py-2 text-sm rounded-md transition-colors cursor-pointer w-full justify-center border-2 border-dashed ${
-              uploadedFiles.length >= 3
-                ? "bg-gray-50 text-gray-500 border-gray-300 cursor-not-allowed"
-                : uploadedFiles.length > 0
+            className={`flex flex-col items-center px-3 py-2 text-sm rounded-md transition-colors cursor-pointer w-full justify-center border-2 border-dashed ${uploadedFiles.length >= 3
+              ? "bg-gray-50 text-gray-500 border-gray-300 cursor-not-allowed"
+              : uploadedFiles.length > 0
                 ? "bg-orange-50 text-orange-700 border-orange-300 hover:bg-orange-100"
                 : "bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100"
-            }`}
+              }`}
           >
             <div className="flex items-center">
               <Upload className="h-4 w-4 mr-1" />
               {uploadedFiles.length >= 3
                 ? "Max Files Reached"
                 : uploadedFiles.length > 0
-                ? "Add More Files"
-                : "Upload Files"}
+                  ? "Add More Files"
+                  : "Upload Files"}
             </div>
             <span className="text-xs mt-1">
               {uploadedFiles.length >= 3
@@ -1094,22 +1097,19 @@ function LineItemForm({
                 return (
                   <div
                     key={fileIndex}
-                    className={`flex items-center justify-between p-2 rounded text-xs border ${
-                      isExisting
-                        ? "bg-blue-50 border-blue-200"
-                        : "bg-green-50 border-green-200"
-                    }`}
+                    className={`flex items-center justify-between p-2 rounded text-xs border ${isExisting
+                      ? "bg-blue-50 border-blue-200"
+                      : "bg-green-50 border-green-200"
+                      }`}
                   >
                     <div className="flex items-center flex-1">
                       <FileText
-                        className={`h-4 w-4 mr-2 ${
-                          isExisting ? "text-blue-600" : "text-green-600"
-                        }`}
+                        className={`h-4 w-4 mr-2 ${isExisting ? "text-blue-600" : "text-green-600"
+                          }`}
                       />
                       <span
-                        className={`truncate font-medium ${
-                          isExisting ? "text-blue-800" : "text-green-800"
-                        }`}
+                        className={`truncate font-medium ${isExisting ? "text-blue-800" : "text-green-800"
+                          }`}
                       >
                         {file.name}
                         {isExisting && (
@@ -1117,9 +1117,8 @@ function LineItemForm({
                         )}
                       </span>
                       <span
-                        className={`ml-2 ${
-                          isExisting ? "text-blue-600" : "text-green-600"
-                        }`}
+                        className={`ml-2 ${isExisting ? "text-blue-600" : "text-green-600"
+                          }`}
                       >
                         (
                         {fileSize

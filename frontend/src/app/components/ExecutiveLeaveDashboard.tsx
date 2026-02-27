@@ -64,10 +64,7 @@ export default function ExecutiveLeaveDashboard({
     });
 
   // Check if user has access to analytics
-  const hasAnalyticsAccess = [
-    "velan@theyellow.network",
-    "gg@theyellownetwork.com",
-  ].includes(userEmail);
+  const hasAnalyticsAccess = userRole === 'executive' || userRole === 'admin';
 
   if (!hasAnalyticsAccess) {
     return (
@@ -160,33 +157,30 @@ export default function ExecutiveLeaveDashboard({
       <div className="flex items-center space-x-2 bg-white p-4 rounded-lg shadow border border-gray-200">
         <button
           onClick={() => setViewMode("pending")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "pending"
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "pending"
               ? "bg-blue-100 text-blue-700"
               : "text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           <ClipboardCheck className="h-4 w-4 mr-2" />
           Pending Approvals
         </button>
         <button
           onClick={() => setViewMode("calendar")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "calendar"
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "calendar"
               ? "bg-blue-100 text-blue-700"
               : "text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           <Calendar className="h-4 w-4 mr-2" />
           Calendar
         </button>
         <button
           onClick={() => setViewMode("employees")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "employees"
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "employees"
               ? "bg-blue-100 text-blue-700"
               : "text-gray-500 hover:text-gray-700"
-          }`}
+            }`}
         >
           <Users className="h-4 w-4 mr-2" />
           Employees
@@ -412,15 +406,14 @@ function ExecutiveOverviewView({
                   </p>
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        emp.leaveType === "Planned Leave"
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${emp.leaveType === "Planned Leave"
                           ? "bg-green-100 text-green-800"
                           : emp.leaveType === "Unplanned Leave"
-                          ? "bg-red-100 text-red-800"
-                          : emp.leaveType === "WFH"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
+                            ? "bg-red-100 text-red-800"
+                            : emp.leaveType === "WFH"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-gray-100 text-gray-800"
+                        }`}
                     >
                       {emp.leaveType}
                     </span>
@@ -546,14 +539,12 @@ function ExecutiveCalendarView({
             return (
               <div
                 key={index}
-                className={`min-h-[100px] p-1 border border-gray-200 ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                className={`min-h-[100px] p-1 border border-gray-200 ${isCurrentMonth ? "bg-white" : "bg-gray-50"
+                  } ${isToday ? "ring-2 ring-blue-500" : ""}`}
               >
                 <div
-                  className={`text-xs p-1 text-right ${
-                    isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                  } ${isToday ? "font-bold" : ""}`}
+                  className={`text-xs p-1 text-right ${isCurrentMonth ? "text-gray-900" : "text-gray-400"
+                    } ${isToday ? "font-bold" : ""}`}
                 >
                   {date.getDate()}
                 </div>
@@ -568,11 +559,9 @@ function ExecutiveCalendarView({
                         className={`text-xs p-1 rounded border ${getLeaveTypeColor(
                           leave.leaveType
                         )}`}
-                        title={`${
-                          leave.employee?.name || leave.employeeEmail
-                        } - ${leave.leaveType}${
-                          leave.reason ? ` - ${leave.reason}` : ""
-                        }`}
+                        title={`${leave.employee?.name || leave.employeeEmail
+                          } - ${leave.leaveType}${leave.reason ? ` - ${leave.reason}` : ""
+                          }`}
                       >
                         <div className="font-medium truncate">
                           {

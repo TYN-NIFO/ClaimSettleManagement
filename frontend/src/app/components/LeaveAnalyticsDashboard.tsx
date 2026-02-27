@@ -13,16 +13,16 @@ interface AnalyticsDashboardProps {
 export default function LeaveAnalyticsDashboard({ userRole, userEmail }: AnalyticsDashboardProps) {
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
-  
+
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [viewType, setViewType] = useState<'overview' | 'employees' | 'calendar'>('overview');
-  
+
   const { data: analyticsData, isLoading: analyticsLoading } = useGetLeaveAnalyticsQuery({
     year: selectedYear,
     ...(selectedMonth && { month: selectedMonth })
   });
-  
+
   const { data: todayData, isLoading: todayLoading } = useGetTodayLeavesQuery(undefined);
 
   // Precompute month range for calendar and fetch leaves once at top-level (hooks cannot be inside render functions)
@@ -36,7 +36,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
   });
 
   // Check if user has access to analytics
-  const hasAnalyticsAccess = ['velan@theyellow.network', 'gg@theyellownetwork.com'].includes(userEmail);
+  const hasAnalyticsAccess = userRole === 'executive' || userRole === 'admin';
 
   if (!hasAnalyticsAccess) {
     return (
@@ -62,15 +62,15 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
 
   const summary = analyticsData?.summary;
   const allEmployees = summary?.employeeSummaries || [];
-  
+
   // Filter out specific employee types
   const excludedEmployees = ['test@theyellow.network', 'admin@theyellow.network', 'finance@theyellow.network'];
-  const employees = allEmployees.filter((emp: any) => 
+  const employees = allEmployees.filter((emp: any) =>
     !excludedEmployees.includes(emp.employee.email)
   );
-  
+
   const allTodayEmployees = todayData?.employees || [];
-  const todayEmployees = allTodayEmployees.filter((emp: any) => 
+  const todayEmployees = allTodayEmployees.filter((emp: any) =>
     !excludedEmployees.includes(emp.employee.email)
   );
 
@@ -262,12 +262,11 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">{emp.employee.name}</p>
                     <div className="flex items-center space-x-2">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        emp.leaveType === 'Planned Leave' ? 'bg-green-100 text-green-800' :
-                        emp.leaveType === 'Unplanned Leave' ? 'bg-red-100 text-red-800' :
-                        emp.leaveType === 'WFH' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${emp.leaveType === 'Planned Leave' ? 'bg-green-100 text-green-800' :
+                          emp.leaveType === 'Unplanned Leave' ? 'bg-red-100 text-red-800' :
+                            emp.leaveType === 'WFH' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                        }`}>
                         {emp.leaveType}
                       </span>
                       {emp.hours && <span className="text-xs text-gray-500">{emp.hours}h</span>}
@@ -357,7 +356,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
     );
   };
 
-    const renderCalendar = () => {
+  const renderCalendar = () => {
     // Generate calendar data for the selected month/year
     const month = selectedMonth || new Date().getMonth() + 1;
     const year = selectedYear;
@@ -365,10 +364,10 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
     const lastDay = new Date(year, month, 0);
     const startDate = new Date(firstDay);
     startDate.setDate(startDate.getDate() - firstDay.getDay()); // Start from Sunday
-    
+
     const calendarDays = [];
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= lastDay || calendarDays.length < 42) { // 6 weeks * 7 days
       calendarDays.push(new Date(currentDate));
       currentDate.setDate(currentDate.getDate() + 1);
@@ -376,7 +375,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
 
     const getLeaveDataForDate = (date: Date) => {
       if (!leaveData?.leaves) return [];
-      
+
       const dateStr = date.toISOString().split('T')[0];
       return leaveData.leaves.filter((leave: any) => {
         const leaveDate = new Date(leave.startDate);
@@ -405,20 +404,20 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
       }
     };
 
-         return (
-       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-                   <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Leave Calendar</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} leave calendar
-            </p>
-            {leaveLoading && (
-              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
-                <p className="text-xs text-blue-800">Loading leave data...</p>
-              </div>
-            )}
-          </div>
-        
+    return (
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Leave Calendar</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} leave calendar
+          </p>
+          {leaveLoading && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-xs text-blue-800">Loading leave data...</p>
+            </div>
+          )}
+        </div>
+
         <div className="px-4 pb-4">
           {/* Calendar Grid */}
           <div className="grid grid-cols-7 gap-1">
@@ -428,94 +427,92 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
                 {day}
               </div>
             ))}
-            
+
             {/* Calendar Days */}
             {calendarDays.map((date, index) => {
               const isCurrentMonth = date.getMonth() === month - 1;
               const isToday = date.toDateString() === new Date().toDateString();
               const leaveData = getLeaveDataForDate(date);
-              
+
               return (
                 <div
                   key={index}
-                  className={`min-h-[80px] p-1 border border-gray-200 ${
-                    isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                  } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                  className={`min-h-[80px] p-1 border border-gray-200 ${isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                    } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
                 >
-                  <div className={`text-xs p-1 text-right ${
-                    isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
-                  } ${isToday ? 'font-bold' : ''}`}>
+                  <div className={`text-xs p-1 text-right ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                    } ${isToday ? 'font-bold' : ''}`}>
                     {date.getDate()}
                   </div>
-                  
+
                   {/* Leave Indicators */}
                   <div className="space-y-1">
-                                                              {leaveData.map((leave: any, leaveIndex: number) => (
-                        <div
-                          key={leaveIndex}
-                          className={`text-xs p-1 rounded truncate ${getLeaveTypeColor(leave.type)}`}
-                          title={`${leave.employee} - ${leave.type}${leave.reason ? ` - ${leave.reason}` : ''}`}
-                        >
-                          <div className="font-medium truncate">{leave.employee.split(' ')[0]}</div>
-                          <div className="text-xs opacity-75">{leave.type}</div>
-                        </div>
-                      ))}
+                    {leaveData.map((leave: any, leaveIndex: number) => (
+                      <div
+                        key={leaveIndex}
+                        className={`text-xs p-1 rounded truncate ${getLeaveTypeColor(leave.type)}`}
+                        title={`${leave.employee} - ${leave.type}${leave.reason ? ` - ${leave.reason}` : ''}`}
+                      >
+                        <div className="font-medium truncate">{leave.employee.split(' ')[0]}</div>
+                        <div className="text-xs opacity-75">{leave.type}</div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
             })}
           </div>
-          
-                                 {/* Legend */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
-                <span className="text-xs text-gray-600">Planned Leave</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
-                <span className="text-xs text-gray-600">Unplanned Leave</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
-                <span className="text-xs text-gray-600">WFH</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
-                <span className="text-xs text-gray-600">Permission</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
-                <span className="text-xs text-gray-600">Business Trip</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-indigo-100 border border-indigo-300 rounded"></div>
-                <span className="text-xs text-gray-600">OD</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-pink-100 border border-pink-300 rounded"></div>
-                <span className="text-xs text-gray-600">Flexi</span>
+
+          {/* Legend */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+              <span className="text-xs text-gray-600">Planned Leave</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div>
+              <span className="text-xs text-gray-600">Unplanned Leave</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div>
+              <span className="text-xs text-gray-600">WFH</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
+              <span className="text-xs text-gray-600">Permission</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-purple-100 border border-purple-300 rounded"></div>
+              <span className="text-xs text-gray-600">Business Trip</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-indigo-100 border border-indigo-300 rounded"></div>
+              <span className="text-xs text-gray-600">OD</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-pink-100 border border-pink-300 rounded"></div>
+              <span className="text-xs text-gray-600">Flexi</span>
+            </div>
+          </div>
+
+          {/* Leave Summary for Selected Period */}
+          {leaveData?.leaves && leaveData.leaves.length > 0 && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">
+                Leave Summary for {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {leaveData.leaves.slice(0, 9).map((leave: any, index: number) => (
+                  <div key={index} className="text-xs bg-white p-2 rounded border">
+                    <div className="font-medium text-gray-900">{leave.employee?.name || leave.employeeEmail}</div>
+                    <div className="text-gray-600">{leave.leaveType}</div>
+                    <div className="text-xs text-gray-500">{leave.startDate}</div>
+                    <div className="text-xs text-gray-500 italic">{leave.reason}</div>
+                  </div>
+                ))}
               </div>
             </div>
-
-           {/* Leave Summary for Selected Period */}
-           {leaveData?.leaves && leaveData.leaves.length > 0 && (
-             <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-               <h4 className="text-sm font-medium text-gray-900 mb-3">
-                 Leave Summary for {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-               </h4>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                 {leaveData.leaves.slice(0, 9).map((leave: any, index: number) => (
-                   <div key={index} className="text-xs bg-white p-2 rounded border">
-                     <div className="font-medium text-gray-900">{leave.employee?.name || leave.employeeEmail}</div>
-                     <div className="text-gray-600">{leave.leaveType}</div>
-                     <div className="text-xs text-gray-500">{leave.startDate}</div>
-                     <div className="text-xs text-gray-500 italic">{leave.reason}</div>
-                   </div>
-                 ))}
-               </div>
-             </div>
-           )}
+          )}
         </div>
       </div>
     );
@@ -532,7 +529,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
             // Refresh the analytics data
             window.location.reload();
           }} />
-          
+
           {/* Year Selector */}
           <select
             value={selectedYear}
@@ -543,7 +540,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
               <option key={year} value={year}>{year}</option>
             ))}
           </select>
-          
+
           {/* Month Selector */}
           <select
             value={selectedMonth || ''}
@@ -571,11 +568,10 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
             <button
               key={tab.key}
               onClick={() => setViewType(tab.key as any)}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                viewType === tab.key
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${viewType === tab.key
                   ? 'border-blue-500 text-blue-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+                }`}
             >
               {tab.label}
             </button>

@@ -5,7 +5,7 @@ import AdminDashboard from '../components/AdminDashboard';
 
 export default function AdminPage() {
   return (
-    <AuthWrapper requiredRole="admin">
+    <AuthWrapper allowedRoles={['admin']}>
       <AdminDashboard />
     </AuthWrapper>
   );

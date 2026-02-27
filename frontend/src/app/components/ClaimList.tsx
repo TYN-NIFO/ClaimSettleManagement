@@ -15,11 +15,9 @@ import {
 import { useState } from "react";
 import PaymentModal from "./PaymentModal";
 import FinanceApprovalModal from "./FinanceApprovalModal";
-import ExecutiveApprovalModal from "./ExecutiveApprovalModal";
 import {
   useMarkPaidMutation,
   useFinanceApproveMutation,
-  useExecutiveApproveMutation,
   useDeleteClaimMutation,
 } from "@/lib/api";
 import toast from "react-hot-toast";
@@ -101,13 +99,9 @@ export default function ClaimList({
   const [financeApproveClaim, setFinanceApproveClaim] = useState<Claim | null>(
     null
   );
-  const [executiveApproveClaim, setExecutiveApproveClaim] = useState<Claim | null>(
-    null
-  );
   const [deletingClaim, setDeletingClaim] = useState<string | null>(null);
   const [markPaid] = useMarkPaidMutation();
   const [financeApprove] = useFinanceApproveMutation();
-  const [executiveApprove] = useExecutiveApproveMutation();
   const [deleteClaim] = useDeleteClaimMutation();
 
   const handleViewClaim = (claimId: string) => {
@@ -127,9 +121,8 @@ export default function ClaimList({
     // Finance managers can edit any claim at any time
     if (user.role === "finance_manager") return true;
 
-    // Executives can edit any claim at any time (identified by email currently)
-    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
-    if (isExecutive) return true;
+    // Executives can edit any claim at any time
+    if (user.role === 'executive') return true;
 
     // Employees can edit their own claims only before finance approval
     if (user.role === "employee") {
@@ -148,10 +141,9 @@ export default function ClaimList({
       return claim.status === "submitted" && claim.employeeId._id !== user._id;
     }
 
-    // Executives can approve claims that are finance approved (FINAL APPROVAL)
-    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
-    if (isExecutive) {
-      return claim.status === "finance_approved";
+    // Executives have readonly access in ClaimList
+    if (user.role === 'executive') {
+      return false;
     }
 
     return false;
@@ -236,7 +228,7 @@ export default function ClaimList({
 
   const canMarkAsPaid = (claim: Claim): boolean => {
     if (!user) return false;
-    const canMark = user.role === "finance_manager" && claim.status === "executive_approved";
+    const canMark = user.role === "finance_manager" && claim.status === "finance_approved";
     console.log('🔍 canMarkAsPaid check:', {
       userId: user._id,
       userRole: user.role,
@@ -256,9 +248,8 @@ export default function ClaimList({
     // Finance managers can delete any claim at any time
     if (user.role === "finance_manager") return true;
 
-    // Executives can delete any claim at any time (identified by email currently)
-    const isExecutive = user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com';
-    if (isExecutive) return true;
+    // Executives can delete any claim at any time
+    if (user.role === 'executive') return true;
 
     // Employees can delete their own claims only before finance approval
     if (user.role === "employee") {
@@ -272,9 +263,10 @@ export default function ClaimList({
   const handleMarkAsPaid = async (claimId: string, channel?: string) => {
     try {
       await markPaid({ id: claimId, channel: channel || "manual" }).unwrap();
+      toast.success('Claim marked as paid successfully');
       setPayingClaim(null);
-    } catch (e) {
-      // swallow; UI can show global toasts if available
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.data?.message || 'Failed to mark claim as paid');
     }
   };
 
@@ -291,28 +283,10 @@ export default function ClaimList({
         notes,
         reason: rejectionReason || notes,
       }).unwrap();
+      toast.success(`Claim ${approved ? 'approved' : 'rejected'} successfully`);
       setFinanceApproveClaim(null);
-    } catch (e) {
-      // swallow
-    }
-  };
-
-  const handleExecutiveApprove = async (
-    claimId: string,
-    approved: boolean,
-    notes?: string,
-    rejectionReason?: string
-  ) => {
-    try {
-      await executiveApprove({
-        id: claimId,
-        action: approved ? "approve" : "reject",
-        notes,
-        reason: rejectionReason || notes,
-      }).unwrap();
-      setExecutiveApproveClaim(null);
-    } catch (e) {
-      // swallow
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.data?.message || 'Failed to process finance approval');
     }
   };
 
@@ -481,16 +455,7 @@ export default function ClaimList({
                           <ThumbsUp className="h-5 w-5" />
                         </button>
                       )}
-                    {(user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') &&
-                      canApproveClaim(claim) && (
-                        <button
-                          onClick={() => setExecutiveApproveClaim(claim)}
-                          className="text-green-600 hover:text-green-900"
-                          title="Executive Approve/Reject"
-                        >
-                          <ThumbsUp className="h-5 w-5" />
-                        </button>
-                      )}
+
                     {canMarkAsPaid(claim) && (
                       <button
                         onClick={() => {
@@ -536,13 +501,6 @@ export default function ClaimList({
           claim={financeApproveClaim}
           onClose={() => setFinanceApproveClaim(null)}
           onApprove={handleFinanceApprove}
-        />
-      )}
-      {executiveApproveClaim && (
-        <ExecutiveApprovalModal
-          claim={executiveApproveClaim}
-          onClose={() => setExecutiveApproveClaim(null)}
-          onApprove={handleExecutiveApprove}
         />
       )}
     </div>
