@@ -21,7 +21,8 @@ import {
   Eye,
   Edit,
   Trash2,
-  Calendar
+  Calendar,
+  List
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
@@ -29,7 +30,7 @@ import LeaveMonthlyView from './LeaveMonthlyView';
 import EmployeeLeaveDashboard from './EmployeeLeaveDashboard';
 
 
-type ViewMode = 'claims' | 'leaves' | 'leave-dashboard';
+type ViewMode = 'claims' | 'leaves' | 'my-calendar' | 'leave-dashboard';
 
 export default function EmployeeDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -146,8 +147,9 @@ export default function EmployeeDashboard() {
           <nav className="-mb-px flex space-x-8">
             {[
               { key: 'claims' as ViewMode, label: 'Claims', icon: FileText },
-              { key: 'leaves' as ViewMode, label: 'Leaves', icon: Calendar },
-              ...(user?.role !== 'employee' ? [{ key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }] : [])
+              { key: 'leaves' as ViewMode, label: 'Leaves', icon: List },
+              { key: 'my-calendar' as ViewMode, label: 'My Calendar', icon: Calendar },
+              ...(user?.role === 'executive' ? [{ key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }] : [])
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -385,6 +387,10 @@ export default function EmployeeDashboard() {
                   isCurrentUser={true}
                 />
               </div>
+            )}
+
+            {currentView === 'my-calendar' && (
+              <EmployeeLeaveDashboard userId={user?._id} forceView="calendar" />
             )}
 
             {currentView === 'leave-dashboard' && (

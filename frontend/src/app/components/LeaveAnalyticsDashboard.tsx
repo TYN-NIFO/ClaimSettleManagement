@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useGetLeaveAnalyticsQuery, useGetTodayLeavesQuery, useGetLeavesByDateRangeQuery, useGetHolidaysQuery } from '@/lib/api';
 import LoadingSpinner from './LoadingSpinner';
 import BulkLeaveUpload from './BulkLeaveUpload';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AnalyticsDashboardProps {
   userRole: string;
@@ -17,6 +18,34 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [viewType, setViewType] = useState<'overview' | 'employees' | 'calendar'>('overview');
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === null) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+      return;
+    }
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === null) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+      return;
+    }
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+  };
 
   const { data: analyticsData, isLoading: analyticsLoading } = useGetLeaveAnalyticsQuery({
     year: selectedYear,
@@ -564,35 +593,40 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Leave Analytics Dashboard</h2>
-        <div className="mt-4 sm:mt-0 flex space-x-3">
+        <div className="mt-4 sm:mt-0 flex items-center space-x-2">
           {/* Bulk Upload Button */}
           <BulkLeaveUpload onUploadComplete={() => {
             // Refresh the analytics data
             window.location.reload();
           }} />
 
-          {/* Year Selector */}
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {[currentYear - 2, currentYear - 1, currentYear].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
+          <BulkLeaveUpload onUploadComplete={() => {
+            // Refresh the analytics data
+            window.location.reload();
+          }} />
 
           {/* Month Selector */}
           <select
             value={selectedMonth || ''}
             onChange={(e) => setSelectedMonth(e.target.value ? parseInt(e.target.value) : null)}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500"
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-blue-500 bg-white"
           >
             <option value="">All Year</option>
             {Array.from({ length: 12 }, (_, i) => (
               <option key={i + 1} value={i + 1}>
                 {new Date(0, i).toLocaleDateString('en-US', { month: 'long' })}
               </option>
+            ))}
+          </select>
+
+          {/* Year Selector */}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map(year => (
+              <option key={year} value={year}>{year}</option>
             ))}
           </select>
         </div>
@@ -624,6 +658,6 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
       {viewType === 'overview' && renderOverview()}
       {viewType === 'employees' && renderEmployees()}
       {viewType === 'calendar' && renderCalendar()}
-    </div>
+    </div >
   );
 }

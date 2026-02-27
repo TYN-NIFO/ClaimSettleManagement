@@ -20,6 +20,8 @@ import {
   CheckCircle,
   AlertCircle,
   ClipboardCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import PendingLeaveApprovals from "./PendingLeaveApprovals";
 
@@ -41,6 +43,34 @@ export default function ExecutiveLeaveDashboard({
   const [viewMode, setViewMode] = useState<ViewMode>("pending");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === null) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+      return;
+    }
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === null) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+      return;
+    }
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+  };
 
   // Fetch analytics data
   const { data: analyticsData, isLoading: analyticsLoading } =
@@ -123,20 +153,7 @@ export default function ExecutiveLeaveDashboard({
           </p>
         </div>
 
-        <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-          {/* Year Selector */}
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            {[currentYear - 2, currentYear - 1, currentYear].map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-
+        <div className="mt-4 sm:mt-0 flex items-center space-x-2">
           {/* Month Selector */}
           <select
             value={selectedMonth || ""}
@@ -149,6 +166,19 @@ export default function ExecutiveLeaveDashboard({
             {Array.from({ length: 12 }, (_, i) => (
               <option key={i + 1} value={i + 1}>
                 {new Date(0, i).toLocaleDateString("en-US", { month: "long" })}
+              </option>
+            ))}
+          </select>
+
+          {/* Year Selector */}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((year) => (
+              <option key={year} value={year}>
+                {year}
               </option>
             ))}
           </select>
@@ -198,6 +228,8 @@ export default function ExecutiveLeaveDashboard({
           leaves={calendarData?.leaves || []}
           holidays={holidaysData || []}
           isLoading={calendarLoading || holidaysLoading}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
         />
       )}
 
@@ -443,6 +475,8 @@ interface ExecutiveCalendarViewProps {
   leaves: any[];
   holidays: any[];
   isLoading: boolean;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
 }
 
 function ExecutiveCalendarView({
@@ -451,6 +485,8 @@ function ExecutiveCalendarView({
   leaves,
   holidays,
   isLoading,
+  onPrevMonth,
+  onNextMonth,
 }: ExecutiveCalendarViewProps) {
   // Generate calendar data
   const firstDay = new Date(year, month - 1, 1);
@@ -526,15 +562,28 @@ function ExecutiveCalendarView({
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900">
-          Organization Leave Calendar
-        </h3>
-        <p className="mt-1 text-sm text-gray-500">
-          {new Date(year, month - 1).toLocaleDateString("en-US", {
+        <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center space-x-2">
+          <button
+            onClick={onPrevMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Previous Month"
+          >
+            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <span>{new Date(year, month - 1).toLocaleDateString("en-US", {
             month: "long",
             year: "numeric",
-          })}{" "}
-          - All employee leaves
+          })}</span>
+          <button
+            onClick={onNextMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Next Month"
+          >
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          </button>
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          All employee leaves
         </p>
       </div>
 

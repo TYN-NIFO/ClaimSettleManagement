@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
-import { useGetLeavesQuery, useGetLeavesByDateRangeQuery, useDeleteLeaveMutation } from '@/lib/api';
+import { useGetLeavesQuery, useGetLeavesByDateRangeQuery, useDeleteLeaveMutation, useGetHolidaysQuery } from '@/lib/api';
 import LeaveForm from './LeaveForm';
 import LoadingSpinner from './LoadingSpinner';
-import { Calendar, List, Plus, Edit, Trash2, Filter } from 'lucide-react';
+import { Calendar, List, Plus, Edit, Trash2, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const toLocalYmd = (d: Date) =>
@@ -14,20 +14,39 @@ const toLocalYmd = (d: Date) =>
 
 interface EmployeeLeaveDashboardProps {
   userId?: string;
+  forceView?: 'calendar' | 'list';
 }
 
 type ViewMode = 'calendar' | 'list';
 
-export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboardProps) {
+export default function EmployeeLeaveDashboard({ userId, forceView }: EmployeeLeaveDashboardProps) {
   const { user } = useSelector((state: RootState) => state.auth);
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
-  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [viewMode, setViewMode] = useState<ViewMode>(forceView || 'calendar');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [showForm, setShowForm] = useState(false);
   const [editingLeave, setEditingLeave] = useState<any>(null);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+  };
 
   // Fetch leaves for list view (month-specific)
   const { data: monthlyData, isLoading: monthlyLoading, refetch: refetchMonthly } = useGetLeavesQuery({
@@ -42,6 +61,9 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
     startDate: toLocalYmd(calendarFirstDay),
     endDate: toLocalYmd(calendarLastDay)
   });
+
+  // Fetch holidays for the year
+  const { data: holidays = [], isLoading: holidaysLoading } = useGetHolidaysQuery({ year: selectedYear });
 
   // Fetch year summary for statistics
   const { data: yearData } = useGetLeavesQuery({ year: selectedYear });
@@ -189,33 +211,23 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-lg shadow border border-gray-200">
         <div className="flex items-center space-x-4">
           {/* View Mode Toggle */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setViewMode('calendar')}
-              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:text-gray-700'
-                }`}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Calendar
-            </button>
-
-          </div>
+          {!forceView && (
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'calendar'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Calendar
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center space-x-3 mt-4 sm:mt-0">
-          <Filter className="h-4 w-4 text-gray-400" />
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1].map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-
+        <div className="flex items-center space-x-2 mt-4 sm:mt-0">
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -227,6 +239,16 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
               </option>
             ))}
           </select>
+
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            {[selectedYear - 2, selectedYear - 1, selectedYear, selectedYear + 1].map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -236,8 +258,11 @@ export default function EmployeeLeaveDashboard({ userId }: EmployeeLeaveDashboar
           year={selectedYear}
           month={selectedMonth}
           leaves={calendarLeaves}
-          isLoading={calendarLoading}
+          holidays={holidays}
+          isLoading={calendarLoading || holidaysLoading}
           currentUser={user}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
         />
       ) : (
         <EmployeeListView
@@ -259,11 +284,14 @@ interface EmployeeCalendarViewProps {
   year: number;
   month: number;
   leaves: any[];
+  holidays: any[];
   isLoading: boolean;
   currentUser: any;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
 }
 
-function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: EmployeeCalendarViewProps) {
+function EmployeeCalendarView({ year, month, leaves, holidays, isLoading, currentUser, onPrevMonth, onNextMonth }: EmployeeCalendarViewProps) {
   // Generate calendar data
   const firstDay = new Date(year, month - 1, 1);
   const lastDay = new Date(year, month, 0);
@@ -287,6 +315,15 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
 
       // Check if the current date falls within the leave period (inclusive)
       return currentDate >= leaveStart && currentDate <= leaveEnd;
+    });
+  };
+
+  const getHolidayDataForDate = (date: Date) => {
+    const dateStr = toLocalYmd(date);
+    return holidays.filter((holiday: any) => {
+      if (!holiday.date) return false;
+      const holidayDateStr = new Date(holiday.date).toISOString().split('T')[0];
+      return dateStr === holidayDateStr;
     });
   };
 
@@ -316,9 +353,25 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900">Team Leave Calendar</h3>
+        <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center space-x-2">
+          <button
+            onClick={onPrevMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Previous Month"
+          >
+            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <span>{new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <button
+            onClick={onNextMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Next Month"
+          >
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          </button>
+        </h3>
         <p className="mt-1 text-sm text-gray-500">
-          {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} - See who's on leave across the team
+          See who's on leave across the team
         </p>
         <div className="mt-2 flex items-center space-x-4 text-xs text-gray-600">
           <div className="flex items-center space-x-1">
@@ -347,20 +400,45 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
             const isCurrentMonth = date.getMonth() === month - 1;
             const isToday = date.toDateString() === new Date().toDateString();
             const leaveData = getLeaveDataForDate(date);
+            const holidayData = getHolidayDataForDate(date);
+            const hasHoliday = holidayData.length > 0;
+            const firstHoliday = hasHoliday ? holidayData[0] : null;
 
             return (
               <div
                 key={index}
-                className={`min-h-[100px] p-1 border border-gray-200 ${isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                className={`min-h-[100px] flex flex-col border border-gray-200 ${isCurrentMonth
+                  ? hasHoliday
+                    ? firstHoliday?.isFlexi ? 'bg-pink-50' : 'bg-indigo-50'
+                    : 'bg-white'
+                  : 'bg-gray-50'
                   } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+                title={firstHoliday ? firstHoliday.name : ''}
               >
                 <div className={`text-xs p-1 text-right ${isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
                   } ${isToday ? 'font-bold' : ''}`}>
                   {date.getDate()}
                 </div>
 
-                {/* Leave Indicators */}
-                <div className="space-y-1">
+                <div className="flex-1 p-1 space-y-1 overflow-y-auto">
+                  {/* Holiday Indicator inside calendar cell */}
+                  {holidayData.map((holiday: any, holidayIndex: number) => (
+                    <div
+                      key={`holiday-${holidayIndex}`}
+                      className={`text-xs p-1 rounded font-medium border ${holiday.isFlexi
+                        ? 'bg-pink-100 text-pink-800 border-pink-200'
+                        : 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                        }`}
+                      title={holiday.name}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="truncate flex-1 font-bold">{holiday.name}</span>
+                        {holiday.isFlexi && <span className="ml-1 bg-pink-100 text-pink-700 py-0 text-[10px] px-1 rounded-full border border-pink-200">Flexi</span>}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Leave Indicators */}
                   {leaveData.slice(0, 11).map((leave: any, leaveIndex: number) => {
                     const isCurrentUser = leave.employeeEmail === currentUser?.email;
                     const isPending = leave.status === 'submitted';
@@ -372,18 +450,23 @@ function EmployeeCalendarView({ year, month, leaves, isLoading, currentUser }: E
                           } ${isPending ? 'opacity-60 border-dashed' : ''} ${isRejected ? 'opacity-40 line-through' : ''}`}
                         title={`${leave.employee?.name || leave.employeeEmail} - ${leave.leaveType}${leave.reason ? ` - ${leave.reason}` : ''} (${leave.status})`}
                       >
-                        <div className="font-medium truncate flex items-center justify-between">
-                          <span>{isCurrentUser ? 'Me' : (leave.employee?.name || leave.employeeEmail).split(' ')[0]}</span>
-                          {isPending && <span className="text-[10px] ml-1">⏳</span>}
-                          {isRejected && <span className="text-[10px] ml-1">❌</span>}
+                        <div className="font-medium truncate flex items-center justify-between relative">
+                          <div className="flex items-center">
+                            {isPending && <div className="w-1.5 h-1.5 rounded-full bg-red-500 mr-1.5 flex-shrink-0" title="Pending Approval"></div>}
+                            <span>{isCurrentUser ? 'Me' : (leave.employee?.name || leave.employeeEmail).split(' ')[0]}</span>
+                          </div>
+                          <div className="flex items-center">
+                            {isPending && <span className="text-[10px] ml-1 opacity-70">Pending</span>}
+                            {isRejected && <span className="text-[10px] ml-1">❌</span>}
+                          </div>
                         </div>
-                        <div className="text-xs opacity-75">{leave.leaveType}</div>
+                        <div className="text-xs opacity-75 ml-3">{leave.leaveType}</div>
                       </div>
                     );
                   })}
-                  {leaveData.length > 11 && (
+                  {leaveData.length > (11 - holidayData.length) && (
                     <div className="text-xs p-1 bg-gray-100 text-gray-600 rounded text-center">
-                      +{leaveData.length - 11} more
+                      +{leaveData.length - (11 - holidayData.length)} more
                     </div>
                   )}
                 </div>

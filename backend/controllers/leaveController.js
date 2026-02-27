@@ -64,6 +64,18 @@ const createLeave = async (req, res) => {
       createdBy: req.user._id
     });
 
+    // Auto-approve if user is an executive
+    if (req.user.role === 'executive') {
+      leave.status = 'approved';
+      leave.approval = {
+        executiveApproved: true,
+        financeApproved: true,
+        approvedBy: req.user._id,
+        approvedAt: new Date(),
+        notes: 'Auto-approved by executive system'
+      };
+    }
+
     await leave.save();
 
     // Populate employee details
@@ -641,9 +653,8 @@ const getLeavesByDateRange = async (req, res) => {
       });
     }
 
-    // Find leaves that overlap with the date range
-    // Show all leaves (submitted, approved, rejected) for calendar visibility
-    const leaves = await Leave.find({
+    // Build the query
+    const query = {
       $or: [
         // Leave starts within the range
         { startDate: { $gte: start, $lte: end } },
@@ -652,7 +663,16 @@ const getLeavesByDateRange = async (req, res) => {
         // Leave spans the entire range
         { startDate: { $lte: start }, endDate: { $gte: end } }
       ]
-    }).populate('employeeId', 'name email department');
+    };
+
+    // Data Isolation: If the user is NOT an executive, they should ONLY see their own leaves
+    if (req.user && req.user.role !== 'executive') {
+      query.employeeId = req.user._id;
+    }
+
+    // Find leaves that overlap with the date range
+    // Show all leaves (submitted, approved, rejected) for calendar visibility
+    const leaves = await Leave.find(query).populate('employeeId', 'name email department');
 
     const response = {
       startDate: start.toISOString().split('T')[0],
