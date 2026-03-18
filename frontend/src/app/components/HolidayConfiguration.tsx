@@ -121,7 +121,7 @@ export default function HolidaysManager() {
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                         className="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-2 bg-gray-50 border"
                     >
-                        {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((year) => (
+                        {Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((year) => (
                             <option key={year} value={year}>
                                 {year}
                             </option>

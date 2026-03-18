@@ -119,8 +119,8 @@ const querySchema = {
     in: ['query'],
     optional: true,
     isInt: {
-      options: { min: 2020, max: 2030 },
-      errorMessage: 'Year must be between 2020 and 2030'
+      options: { min: new Date().getFullYear() - 5, max: new Date().getFullYear() + 5 },
+      errorMessage: `Year must be between ${new Date().getFullYear() - 5} and ${new Date().getFullYear() + 5}`
     }
   },
   month: {

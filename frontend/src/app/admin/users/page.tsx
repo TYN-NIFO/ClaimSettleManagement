@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RootState } from '@/lib/store';
 import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeactivateUserMutation, useResetUserPasswordMutation } from '@/lib/api';
-import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus } from 'lucide-react';
+import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -60,7 +60,6 @@ export default function UserManagement() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [createForm, setCreateForm] = useState<CreateUserForm>({
     name: '',
@@ -353,12 +352,6 @@ export default function UserManagement() {
     }
   };
 
-  const navigationItems = [
-    { name: 'Dashboard', href: '/admin', icon: Settings },
-    { name: 'Users', href: '/admin/users', icon: Users, active: true },
-    { name: 'Claims', href: '/admin/claims', icon: FileText },
-    { name: 'Finance', href: '/finance', icon: CreditCard },
-  ];
 
   const getDrawerTitle = () => {
     switch (drawerMode) {
@@ -731,77 +724,21 @@ export default function UserManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)}></div>
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
-          <div className="flex h-16 items-center justify-between px-4">
-            <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
-            <button onClick={() => setSidebarOpen(false)}>
-              <X className="h-6 w-6 text-gray-400" />
-            </button>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${item.active
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-          <div className="flex h-16 items-center px-4">
-            <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${item.active
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="w-full">
         {/* Header */}
         <header className="bg-white shadow-sm border-b">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center h-16">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+              <Link
+                href="/admin"
+                className="p-2 rounded-full text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                title="Back to Dashboard"
               >
-                <Menu className="h-6 w-6" />
-              </button>
-              <h1 className="ml-4 lg:ml-0 text-2xl font-bold text-gray-900">User Management</h1>
+                <ArrowLeft className="h-6 w-6" />
+              </Link>
+              <h1 className="ml-4 text-2xl font-bold text-gray-900">User Management</h1>
             </div>
             <button
               onClick={(e) => {

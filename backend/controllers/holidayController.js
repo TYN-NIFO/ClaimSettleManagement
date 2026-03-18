@@ -83,6 +83,12 @@ export const updateHoliday = async (req, res) => {
             return res.status(404).json({ error: 'Holiday not found' });
         }
 
+        // Fix: If holiday was created without createdBy (e.g. initial setup),
+        // assign it to the user who is now updating it.
+        if (!holiday.createdBy) {
+            holiday.createdBy = req.user._id;
+        }
+
         if (name) holiday.name = name;
         if (isFlexi !== undefined) holiday.isFlexi = isFlexi;
 

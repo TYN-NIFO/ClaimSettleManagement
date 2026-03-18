@@ -176,7 +176,7 @@ export default function ExecutiveLeaveDashboard({
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
-            {[currentYear - 2, currentYear - 1, currentYear, currentYear + 1].map((year) => (
+            {Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((year) => (
               <option key={year} value={year}>
                 {year}
               </option>
