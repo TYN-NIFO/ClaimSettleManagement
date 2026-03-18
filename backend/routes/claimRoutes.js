@@ -6,6 +6,7 @@ import ExcelJS from "exceljs";
 import { auth } from "../middleware/auth.js";
 import { rbac, canAccessClaim } from "../middleware/rbac.js";
 import Claim from "../models/Claim.js";
+import User from "../models/User.js";
 import {
   validateAgainstPolicy,
   computeClaimTotals,
@@ -322,20 +323,27 @@ router.get("/", auth, async (req, res) => {
     if (status) filter.status = status;
     if (category) filter.category = category;
 
-    // Role-based filtering - Check executive role FIRST before other role checks
-    if (user.role === "executive" || user.role === "admin") {
-      // Executives and admins see all claims for final approval
-      // No filter applied - they can see everything
-      console.log(`${user.role} - no filter applied`);
-    } else if (user.role === "employee") {
+    // Role-based filtering - RESTRICT BY DEFAULT
+    if (user.role === "admin" || user.role === "executive" || user.role === "finance_manager") {
+      // High-level roles see all claims
+      console.log(`${user.role} - no filter applied (authorized for all)`);
+    } else if (user.role === "supervisor") {
+      // Supervisors see their own claims + those of their assigned employees
+      const subordinates = await User.find({
+        $or: [
+          { assignedSupervisor1: user._id },
+          { assignedSupervisor2: user._id }
+        ]
+      }).select("_id");
+      
+      const subordinateIds = subordinates.map(s => s._id);
+      filter.employeeId = { $in: [user._id, ...subordinateIds] };
+      console.log("Supervisor filter applied (own + subordinates):", filter);
+    } else {
+      // Default / Employee / Unexpected roles only see their own claims
       filter.employeeId = user._id;
-      console.log("Employee filter applied:", filter);
-    } else if (user.role === "finance_manager") {
-      // Finance managers see all claims - they need to see their own claims and all claims that need their attention
-      // No filter applied - they can see everything
-      console.log("Finance manager - no filter applied");
+      console.log(`${user.role || 'Unknown role'} filter applied (own claims only):`, filter);
     }
-    // Admin can see all claims (no filter applied)
 
     console.log("Final filter:", JSON.stringify(filter, null, 2));
 
@@ -384,13 +392,20 @@ router.get("/export", auth, async (req, res) => {
     if (status) filter.status = status;
     if (category) filter.category = category;
 
-    // Role-based filtering
-    if (user.role === "executive" || user.role === "admin") {
-      // no filter
-    } else if (user.role === "employee") {
+    // Role-based filtering - RESTRICT BY DEFAULT
+    if (user.role === "admin" || user.role === "executive" || user.role === "finance_manager") {
+      // No filter
+    } else if (user.role === "supervisor") {
+      const subordinates = await User.find({
+        $or: [
+          { assignedSupervisor1: user._id },
+          { assignedSupervisor2: user._id }
+        ]
+      }).select("_id");
+      const subordinateIds = subordinates.map(s => s._id);
+      filter.employeeId = { $in: [user._id, ...subordinateIds] };
+    } else {
       filter.employeeId = user._id;
-    } else if (user.role === "finance_manager") {
-      // no filter
     }
 
     const claims = await Claim.find(filter)
@@ -508,11 +523,21 @@ router.get("/stats", auth, async (req, res) => {
     const user = req.user;
     const filter = {};
 
-    // Role-based filtering
-    if (user.role === "employee") {
+    // Role-based filtering - RESTRICT BY DEFAULT
+    if (user.role === "admin" || user.role === "executive" || user.role === "finance_manager") {
+      // No filter
+    } else if (user.role === "supervisor") {
+      const subordinates = await User.find({
+        $or: [
+          { assignedSupervisor1: user._id },
+          { assignedSupervisor2: user._id }
+        ]
+      }).select("_id");
+      const subordinateIds = subordinates.map(s => s._id);
+      filter.employeeId = { $in: [user._id, ...subordinateIds] };
+    } else {
       filter.employeeId = user._id;
     }
-    // Finance managers and admins can see all claims (no filter applied)
 
     const stats = await Claim.aggregate([
       { $match: filter },

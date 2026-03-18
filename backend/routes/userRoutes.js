@@ -7,6 +7,7 @@ import {
   createUser,
   updateUser,
   deactivateUser,
+  deleteUser,
   resetPassword,
   getSupervisors,
   getEmployeeNames,
@@ -510,6 +511,32 @@ router.patch(
   passwordValidation,
   resetPassword
 );
+
+/**
+ * @swagger
+ * /users/{id}:
+ *   delete:
+ *     tags: [User Management]
+ *     summary: Delete user permanently
+ *     description: Permanently delete a user account. Fails if user has claims or leaves. (Admin only)
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID
+ *     responses:
+ *       200:
+ *         description: User deleted successfully
+ *       400:
+ *         description: Cannot delete user due to existing records
+ *       404:
+ *         description: User not found
+ */
+router.delete("/:id", auth, requireAdmin, deleteUser);
 
 export default router;
 

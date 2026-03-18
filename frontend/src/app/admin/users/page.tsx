@@ -5,8 +5,8 @@ import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RootState } from '@/lib/store';
-import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeactivateUserMutation, useResetUserPasswordMutation } from '@/lib/api';
-import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus, ArrowLeft } from 'lucide-react';
+import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeactivateUserMutation, useResetUserPasswordMutation, useDeleteUserMutation } from '@/lib/api';
+import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus, ArrowLeft, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -90,6 +90,7 @@ export default function UserManagement() {
   const [updateUser] = useUpdateUserMutation();
   const [deactivateUser] = useDeactivateUserMutation();
   const [resetPassword] = useResetUserPasswordMutation();
+  const [deleteUser] = useDeleteUserMutation();
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -288,7 +289,7 @@ export default function UserManagement() {
   };
 
   const handleDeactivateUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to deactivate this user?')) return;
+    if (!confirm('Are you sure you want to deactivate this user? They will no longer be able to log in, but their history will be preserved.')) return;
 
     try {
       await deactivateUser(userId).unwrap();
@@ -296,6 +297,18 @@ export default function UserManagement() {
     } catch (error: any) {
       console.error('Error deactivating user:', error);
       toast.error(error?.data?.error || 'Error deactivating user');
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to PERMANENTLY DELETE this user? This action cannot be undone and will only work if the user has no claim or leave records.')) return;
+
+    try {
+      await deleteUser(userId).unwrap();
+      toast.success('User deleted permanently!');
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast.error(error?.data?.error || 'Error deleting user');
     }
   };
 
@@ -869,17 +882,29 @@ export default function UserManagement() {
                               <Key className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log('Deactivate button clicked for user:', user._id);
-                                handleDeactivateUser(user._id);
-                              }}
-                              className="text-red-600 hover:text-red-900"
-                              title="Deactivate User"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Deactivate button clicked for user:', user._id);
+                                  handleDeactivateUser(user._id);
+                                }}
+                                className="text-orange-600 hover:text-orange-900"
+                                title="Deactivate User"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Delete button clicked for user:', user._id);
+                                  handleDeleteUser(user._id);
+                                }}
+                                className="text-red-600 hover:text-red-900"
+                                title="Delete User Permanently"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                           </div>
                         </td>
                       </tr>
