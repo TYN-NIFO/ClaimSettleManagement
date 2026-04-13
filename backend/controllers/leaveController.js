@@ -229,7 +229,7 @@ const getPendingLeaves = async (req, res) => {
 
     const pendingLeaves = await Leave.find({ status: 'submitted' })
       .populate('employeeId', 'name email department')
-      .sort({ createdAt: 1 }) // Oldest first for approval queue
+      .sort({ createdAt: -1 }) // Newest first for dashboard visibility
       .skip(skip)
       .limit(parseInt(limit));
 

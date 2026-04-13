@@ -6,6 +6,9 @@ import LoadingSpinner from './LoadingSpinner';
 import BulkLeaveUpload from './BulkLeaveUpload';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+const toLocalYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 interface AnalyticsDashboardProps {
   userRole: string;
   userEmail: string;
@@ -20,30 +23,22 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
   const [viewType, setViewType] = useState<'overview' | 'employees' | 'calendar'>('overview');
 
   const handlePrevMonth = () => {
-    if (selectedMonth === null) {
-      setSelectedMonth(12);
-      setSelectedYear(selectedYear - 1);
-      return;
-    }
-    if (selectedMonth === 1) {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 1) {
       setSelectedMonth(12);
       setSelectedYear(selectedYear - 1);
     } else {
-      setSelectedMonth(selectedMonth - 1);
+      setSelectedMonth(activeMonth - 1);
     }
   };
 
   const handleNextMonth = () => {
-    if (selectedMonth === null) {
-      setSelectedMonth(1);
-      setSelectedYear(selectedYear + 1);
-      return;
-    }
-    if (selectedMonth === 12) {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 12) {
       setSelectedMonth(1);
       setSelectedYear(selectedYear + 1);
     } else {
-      setSelectedMonth(selectedMonth + 1);
+      setSelectedMonth(activeMonth + 1);
     }
   };
 
@@ -60,8 +55,8 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
   const calendarFirstDay = new Date(calendarYear, calendarMonth - 1, 1);
   const calendarLastDay = new Date(calendarYear, calendarMonth, 0);
   const { data: leaveData, isLoading: leaveLoading } = useGetLeavesByDateRangeQuery({
-    startDate: calendarFirstDay.toISOString().split('T')[0],
-    endDate: calendarLastDay.toISOString().split('T')[0]
+    startDate: toLocalYmd(calendarFirstDay),
+    endDate: toLocalYmd(calendarLastDay)
   });
 
   const { data: holidaysData, isLoading: holidaysLoading } = useGetHolidaysQuery({ year: calendarYear });
@@ -407,10 +402,11 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
     const getLeaveDataForDate = (date: Date) => {
       if (!leaveData?.leaves) return [];
 
-      const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const localDateStr = toLocalYmd(date);
       return leaveData.leaves.filter((leave: any) => {
-        const leaveDateStr = (leave.startDate || '').split('T')[0];
-        return leaveDateStr === localDateStr;
+        const leaveStartStr = (leave.startDate || '').split('T')[0];
+        const leaveEndStr = (leave.endDate || leave.startDate || '').split('T')[0];
+        return localDateStr >= leaveStartStr && localDateStr <= leaveEndStr;
       }).map((leave: any) => ({
         date: leave.startDate,
         employee: leave.employee?.name || leave.employeeEmail,
@@ -424,7 +420,7 @@ export default function LeaveAnalyticsDashboard({ userRole, userEmail }: Analyti
     const getHolidayDataForDate = (date: Date) => {
       if (!holidaysData) return [];
 
-      const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const localDateStr = toLocalYmd(date);
       return holidaysData.filter((holiday: any) => {
         const holidayDateStr = (holiday.date || '').split('T')[0];
         return holidayDateStr === localDateStr;

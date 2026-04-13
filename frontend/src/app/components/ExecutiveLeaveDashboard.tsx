@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import PendingLeaveApprovals from "./PendingLeaveApprovals";
 
+const toLocalYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 interface ExecutiveLeaveDashboardProps {
   userRole: string;
   userEmail: string;
@@ -45,30 +48,22 @@ export default function ExecutiveLeaveDashboard({
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
   const handlePrevMonth = () => {
-    if (selectedMonth === null) {
-      setSelectedMonth(12);
-      setSelectedYear(selectedYear - 1);
-      return;
-    }
-    if (selectedMonth === 1) {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 1) {
       setSelectedMonth(12);
       setSelectedYear(selectedYear - 1);
     } else {
-      setSelectedMonth(selectedMonth - 1);
+      setSelectedMonth(activeMonth - 1);
     }
   };
 
   const handleNextMonth = () => {
-    if (selectedMonth === null) {
-      setSelectedMonth(1);
-      setSelectedYear(selectedYear + 1);
-      return;
-    }
-    if (selectedMonth === 12) {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 12) {
       setSelectedMonth(1);
       setSelectedYear(selectedYear + 1);
     } else {
-      setSelectedMonth(selectedMonth + 1);
+      setSelectedMonth(activeMonth + 1);
     }
   };
 
@@ -89,8 +84,8 @@ export default function ExecutiveLeaveDashboard({
   const calendarLastDay = new Date(selectedYear, calendarMonth, 0);
   const { data: calendarData, isLoading: calendarLoading } =
     useGetLeavesByDateRangeQuery({
-      startDate: calendarFirstDay.toISOString().split("T")[0],
-      endDate: calendarLastDay.toISOString().split("T")[0],
+      startDate: toLocalYmd(calendarFirstDay),
+      endDate: toLocalYmd(calendarLastDay),
     });
 
   const { data: holidaysData, isLoading: holidaysLoading } = useGetHolidaysQuery({ year: selectedYear });
@@ -504,10 +499,11 @@ function ExecutiveCalendarView({
   }
 
   const getLeaveDataForDate = (date: Date) => {
-    const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const localDateStr = toLocalYmd(date);
     return leaves.filter((leave: any) => {
-      const leaveDateStr = (leave.startDate || '').split("T")[0];
-      return leaveDateStr === localDateStr;
+      const leaveStartStr = (leave.startDate || '').split("T")[0];
+      const leaveEndStr = (leave.endDate || leave.startDate || '').split("T")[0];
+      return localDateStr >= leaveStartStr && localDateStr <= leaveEndStr;
     });
   };
 
@@ -535,7 +531,7 @@ function ExecutiveCalendarView({
   const getHolidayDataForDate = (date: Date) => {
     if (!holidays) return [];
 
-    const localDateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const localDateStr = toLocalYmd(date);
     return holidays
       .filter((holiday: any) => {
         const holidayDateStr = (holiday.date || '').split("T")[0];

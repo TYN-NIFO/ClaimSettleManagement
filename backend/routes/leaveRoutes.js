@@ -159,8 +159,8 @@ const querySchema = {
     in: ['query'],
     optional: true,
     isInt: {
-      options: { min: 1, max: 100 },
-      errorMessage: 'Limit must be between 1 and 100'
+      options: { min: 1, max: 500 },
+      errorMessage: 'Limit must be between 1 and 500'
     }
   }
 };
