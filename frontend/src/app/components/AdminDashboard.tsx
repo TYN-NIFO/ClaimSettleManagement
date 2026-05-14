@@ -25,7 +25,8 @@ import {
   AlertCircle,
   FolderOpen,
   Plus,
-  Calendar
+  Calendar,
+  Download
 } from 'lucide-react';
 import PolicyManager from './PolicyManager';
 import CategoryManager from './CategoryManager';
@@ -54,6 +55,35 @@ export default function AdminDashboard() {
       await authService.logout();
       dispatch(logout());
       router.push('/login');
+    }
+  };
+
+  const handleDownloadCSV = async () => {
+    try {
+      const token = authService.getAccessToken();
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/claims/export`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `claims_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Claims exported successfully');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download claims');
     }
   };
 
@@ -406,6 +436,13 @@ export default function AdminDashboard() {
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Submit Claim
+              </button>
+              <button
+                onClick={handleDownloadCSV}
+                className="flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 ml-2"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Export
               </button>
               <button
                 onClick={handleLogout}
