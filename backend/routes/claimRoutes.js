@@ -188,30 +188,31 @@ router.post("/", auth, upload.array("files", 50), async (req, res) => {
       console.log("Processing uploaded files:", req.files.length);
 
       for (const file of req.files) {
-        try {
-          // Store file using storage service (returns public URL)
-          const result = await storageService.save(file);
-          const attachment = {
-            fileId: result.fileId,
-            name: file.originalname,
-            size: file.size,
-            mime: file.mimetype,
-            storageKey: result.storageKey,
-            url: result.url, // Public S3 URL
-            label: "supporting_doc",
-          };
+        // Store file using storage service (returns public URL)
+        const result = await storageService.save(file);
 
-          // Find which line item this file belongs to based on file mapping
-          const lineItemIndex = fileMapping[file.originalname] || 0;
-          if (claimData.lineItems && claimData.lineItems[lineItemIndex]) {
-            if (!claimData.lineItems[lineItemIndex].attachments) {
-              claimData.lineItems[lineItemIndex].attachments = [];
-            }
-            claimData.lineItems[lineItemIndex].attachments.push(attachment);
+        // CRITICAL FIX: Ensure URL exists before proceeding
+        if (!result || !result.url) {
+          throw new Error(`Critical Upload Failure: S3 did not return a URL for ${file.originalname}`);
+        }
+
+        const attachment = {
+          fileId: result.fileId,
+          name: file.originalname,
+          size: file.size,
+          mime: file.mimetype,
+          storageKey: result.storageKey,
+          url: result.url,
+          label: "supporting_doc",
+        };
+
+        // Find which line item this file belongs to based on file mapping
+        const lineItemIndex = fileMapping[file.originalname];
+        if (lineItemIndex !== undefined && claimData.lineItems && claimData.lineItems[lineItemIndex]) {
+          if (!claimData.lineItems[lineItemIndex].attachments) {
+            claimData.lineItems[lineItemIndex].attachments = [];
           }
-        } catch (fileError) {
-          console.error("Error processing file:", file.originalname, fileError);
-          // Continue processing other files
+          claimData.lineItems[lineItemIndex].attachments.push(attachment);
         }
       }
     }
@@ -335,7 +336,7 @@ router.get("/", auth, async (req, res) => {
           { assignedSupervisor2: user._id }
         ]
       }).select("_id");
-      
+
       const subordinateIds = subordinates.map(s => s._id);
       filter.employeeId = { $in: [user._id, ...subordinateIds] };
       console.log("Supervisor filter applied (own + subordinates):", filter);
@@ -429,21 +430,28 @@ router.get("/export", auth, async (req, res) => {
       { header: "Net Payable", key: "netPayable", width: 15 },
       { header: "Finance Approved By", key: "financeApprovedBy", width: 25 },
       { header: "Paid By", key: "paidBy", width: 25 },
+      { header: "Documents", key: "documents", width: 50 },
     ];
 
     claims.forEach((claim) => {
+      // Safely aggregate document URLs
+      const docUrls = claim.lineItems?.flatMap(item =>
+        (item.attachments || []).map(att => att.url || 'URL_MISSING')
+      ).join(', ') || '';
+
       sheet.addRow({
         claimId: claim.claimId || claim._id.toString(),
-        createdAt: new Date(claim.createdAt).toLocaleDateString(),
+        createdAt: claim.createdAt ? new Date(claim.createdAt).toLocaleDateString() : 'N/A',
         employee: claim.employeeId?.name || "Unknown",
         department: claim.employeeId?.department || "Unknown",
-        category: claim.category,
-        businessUnit: claim.businessUnit,
-        status: claim.status,
+        category: claim.category || "N/A",
+        businessUnit: claim.businessUnit || "N/A",
+        status: claim.status || "submitted",
         grandTotal: claim.grandTotal || 0,
         netPayable: claim.netPayable || 0,
         financeApprovedBy: claim.financeApproval?.approvedBy?.name || "",
         paidBy: claim.payment?.paidBy?.name || "",
+        documents: docUrls,
       });
     });
 

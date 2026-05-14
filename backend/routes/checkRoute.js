@@ -9,8 +9,8 @@ router.get('/getClaimsExcel', async (req, res) => {
   try {
     const claims = await Claim.find({ 'financeApproval.status': 'approved' })
       .populate('employeeId', 'name email');
-  
-    
+
+
     // Initialize Excel workbook and worksheet
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Claims');
@@ -34,10 +34,10 @@ router.get('/getClaimsExcel', async (req, res) => {
         worksheet.addRow({
           name: claim.employeeId?.name || 'Unknown User',
           email: claim.employeeId?.email || 'No Email',
-          dateOfClaim: new Date(item.date).toLocaleDateString('en-IN'),
-          category: claim.category,
-          description: item.description,
-          amount: item.amountInINR || item.amount,
+          dateOfClaim: item.date ? new Date(item.date).toLocaleDateString('en-IN') : 'N/A',
+          category: claim.category || 'N/A',
+          description: item.description || 'N/A',
+          amount: item.amountInINR || item.amount || 0,
           financeApproval: claim.financeApproval?.status || 'pending',
           executiveApproval: claim.executiveApproval?.status || 'pending',
           status: claim.status || 'submitted',

@@ -2,12 +2,19 @@ import mongoose from 'mongoose';
 import { getNextClaimSequence } from '../services/counterService.js';
 
 const AttachmentSchema = new mongoose.Schema({
-  fileId: String,
-  name: String,
-  size: Number,
-  mime: String,
-  storageKey: String,
-  url: String, // Public S3 URL
+  fileId: { type: String, required: true },
+  name: { type: String, required: true },
+  size: { type: Number },
+  mime: { type: String },
+  storageKey: { type: String, required: true },
+  url: {
+    type: String,
+    required: [true, 'S3 URL is mandatory for attachments'],
+    validate: {
+      validator: (v) => v && v.startsWith('http'),
+      message: 'Invalid attachment URL'
+    }
+  },
   label: String // for required document matching
 }, { _id: false });
 
