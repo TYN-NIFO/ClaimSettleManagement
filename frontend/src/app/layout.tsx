@@ -4,8 +4,8 @@ import "./globals.css";
 import TopNav from "./components/TopNav";
 
 export const metadata: Metadata = {
-  title: "Claim Management System",
-  description: "Internal reimbursement claim management system",
+  title: "YDesk",
+  description: "Internal reimbursement system",
 };
 
 export default function RootLayout({
