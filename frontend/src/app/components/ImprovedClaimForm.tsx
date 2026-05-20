@@ -115,7 +115,7 @@ export default function ImprovedClaimForm({
   } = useForm<ClaimFormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      businessUnit: "Alliance",
+      businessUnit: "Coinnovation",
       category: "",
       advances: [],
       lineItems: [],
@@ -144,7 +144,7 @@ export default function ImprovedClaimForm({
   useEffect(() => {
     if (isEditing && existingClaim) {
       const claimData = {
-        businessUnit: existingClaim.businessUnit || "Alliance",
+        businessUnit: existingClaim.businessUnit || "Coinnovation",
         category: existingClaim.category || "",
         advances: existingClaim.advances || [],
         lineItems:
