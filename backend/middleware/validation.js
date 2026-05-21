@@ -58,7 +58,7 @@ export const validateUser = [
 // Claim validation
 export const validateClaim = [
   body('businessUnit')
-    .isIn(['Alliance', 'Coinnovation', 'General'])
+    .isIn(['Coinnovation', 'General'])
     .withMessage('Invalid business unit'),
   body('category')
     .trim()

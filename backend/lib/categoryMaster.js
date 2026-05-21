@@ -107,4 +107,4 @@ export const categoryMaster = [
 export const validCategories = categoryMaster.map((cat) => cat.name);
 
 // Business units
-export const validBusinessUnits = ["Alliance", "Coinnovation", "General"];
+export const validBusinessUnits = ["Coinnovation", "General"];

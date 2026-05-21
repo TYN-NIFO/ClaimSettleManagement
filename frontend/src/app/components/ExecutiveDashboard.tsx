@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useGetLeavesQuery, useLogoutMutation } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useGetLeavesQuery, useLogoutMutation } from '@/lib/api';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import authService from '@/lib/authService';
@@ -38,7 +38,9 @@ export default function ExecutiveDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'personal' | 'organization' | 'leave-dashboard' | 'holidays'>('personal'); // 'personal' or 'organization'
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
+  const { data: personalClaimStats } = useGetClaimStatsQuery({ scope: 'own' });
+  const { data: organizationClaimStats } = useGetClaimStatsQuery({});
   const { data: leavesData, isLoading: leavesLoading } = useGetLeavesQuery({});
   const claims = claimsData?.claims || [];
   const leaves = leavesData?.leaves || [];
@@ -67,60 +69,27 @@ export default function ExecutiveDashboard() {
 
   // Calculate personal statistics
   const calculatePersonalStats = () => {
-    if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
-
-    const personalClaims = claims.filter((claim: any) => claim.employeeId?._id === user?._id);
-
-    const stats = personalClaims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
-      acc.total++;
-      acc.totalAmount += claim.grandTotal || 0;
-
-      switch (claim.status) {
-        case 'submitted':
-          acc.pending++;
-          break;
-        case 'approved':
-        case 'finance_approved':
-        case 'paid':
-          acc.approved++;
-          break;
-        case 'rejected':
-          acc.rejected++;
-          break;
-      }
-
-      return acc;
-    }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-
-    return stats;
+    return calculateStatsFromApi(personalClaimStats);
   };
 
   // Calculate organization statistics
   const calculateOrgStats = () => {
-    if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
+    return calculateStatsFromApi(organizationClaimStats);
+  };
 
-    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
-      acc.total++;
-      acc.totalAmount += claim.grandTotal || 0;
+  const calculateStatsFromApi = (statsData: any) => {
+    if (!statsData) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
 
-      switch (claim.status) {
-        case 'submitted':
-          acc.pending++;
-          break;
-        case 'approved':
-        case 'finance_approved':
-        case 'paid':
-          acc.approved++;
-          break;
-        case 'rejected':
-          acc.rejected++;
-          break;
-      }
+    const countByStatus = (status: string) =>
+      statsData.statusStats?.find((item: { _id: string }) => item._id === status)?.count || 0;
 
-      return acc;
-    }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-
-    return stats;
+    return {
+      total: statsData.totalClaims || 0,
+      pending: countByStatus('submitted'),
+      approved: countByStatus('approved') + countByStatus('finance_approved') + countByStatus('paid') + countByStatus('done'),
+      rejected: countByStatus('rejected'),
+      totalAmount: statsData.totalAmount || 0
+    };
   };
 
   const personalStats = calculatePersonalStats();

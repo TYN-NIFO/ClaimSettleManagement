@@ -665,10 +665,10 @@ const getLeavesByDateRange = async (req, res) => {
       ]
     };
 
-    // Data Isolation: If the user is NOT an executive, they should ONLY see their own leaves
-    if (req.user && req.user.role !== 'executive') {
-      query.employeeId = req.user._id;
-    }
+    // Data Isolation: Changed so that all authenticated employees can see others' leaves on their calendar
+    // if (req.user && req.user.role !== 'executive') {
+    //   query.employeeId = req.user._id;
+    // }
 
     // Find leaves that overlap with the date range
     // Show all leaves (submitted, approved, rejected) for calendar visibility

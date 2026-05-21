@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useLogoutMutation } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useLogoutMutation } from '@/lib/api';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import authService from '@/lib/authService';
@@ -38,7 +38,8 @@ export default function EmployeeDashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
+  const { data: claimStats } = useGetClaimStatsQuery({ scope: 'own' });
   const claims = claimsData?.claims || [];
   const [logoutMutation] = useLogoutMutation();
   const router = useRouter();
@@ -63,30 +64,18 @@ export default function EmployeeDashboard() {
 
   // Calculate statistics
   const calculateStats = () => {
-    if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
+    if (!claimStats) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
 
-    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
-      acc.total++;
-      acc.totalAmount += claim.grandTotal || 0;
+    const countByStatus = (status: string) =>
+      claimStats.statusStats?.find((item: { _id: string }) => item._id === status)?.count || 0;
 
-      switch (claim.status) {
-        case 'submitted':
-          acc.pending++;
-          break;
-        case 'approved':
-        case 'finance_approved':
-        case 'paid':
-          acc.approved++;
-          break;
-        case 'rejected':
-          acc.rejected++;
-          break;
-      }
-
-      return acc;
-    }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-
-    return stats;
+    return {
+      total: claimStats.totalClaims || 0,
+      pending: countByStatus('submitted'),
+      approved: countByStatus('approved') + countByStatus('finance_approved') + countByStatus('paid') + countByStatus('done'),
+      rejected: countByStatus('rejected'),
+      totalAmount: claimStats.totalAmount || 0
+    };
   };
 
   const stats = calculateStats();

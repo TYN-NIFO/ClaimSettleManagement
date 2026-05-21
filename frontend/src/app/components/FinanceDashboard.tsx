@@ -29,12 +29,14 @@ import { categoryMaster } from '@/lib/categoryMaster';
 export default function FinanceDashboard() {
   const [currentView, setCurrentView] = useState<'claims' | 'leave-dashboard'>('claims');
   const { user } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
   const claims = claimsData?.claims || [];
   const { data: stats, isLoading: statsLoading } = useGetClaimStatsQuery({});
   const router = useRouter();
   const [financeApprove] = useFinanceApproveMutation();
   const [markPaid] = useMarkPaidMutation();
+  const getStatusCount = (status: string) =>
+    stats?.statusStats?.find((item: { _id: string }) => item._id === status)?.count || 0;
 
   // Filters state
   const [filters, setFilters] = useState<FilterState>({
@@ -296,7 +298,7 @@ export default function FinanceDashboard() {
                       <div className="ml-4">
                         <p className="text-sm font-medium text-gray-600">Paid Claims</p>
                         <p className="text-2xl font-bold text-gray-900">
-                          {stats.statusStats?.find((s: { _id: string }) => s._id === 'paid')?.count || 0}
+                          {getStatusCount('paid')}
                         </p>
                       </div>
                     </div>
@@ -307,9 +309,9 @@ export default function FinanceDashboard() {
                     <div className="flex items-center">
                       <Clock className="h-8 w-8 text-yellow-600" />
                       <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-600">Pending Payment</p>
+                        <p className="text-sm font-medium text-gray-600">Pending Claims</p>
                         <p className="text-2xl font-bold text-gray-900">
-                          {stats.statusStats?.find((s: { _id: string }) => s._id === 'finance_approved')?.count || 0}
+                          {getStatusCount('submitted')}
                         </p>
                       </div>
                     </div>

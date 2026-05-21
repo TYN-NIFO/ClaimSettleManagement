@@ -47,7 +47,7 @@ const ClaimSchema = new mongoose.Schema({
   },
   businessUnit: {
     type: String,
-    enum: ['Alliance', 'Coinnovation', 'General'],
+    enum: ['Coinnovation', 'General'],
     required: true
   },
   category: {

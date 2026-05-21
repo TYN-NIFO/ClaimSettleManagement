@@ -214,7 +214,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
   explorer: true,
   customCss: '.swagger-ui .topbar { display: none }',
-  customSiteTitle: "Claim Management API Documentation"
+  customSiteTitle: "YDesk API Documentation"
 }));
 
 // Health check with detailed information

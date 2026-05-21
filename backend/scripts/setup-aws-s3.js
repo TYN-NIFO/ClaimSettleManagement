@@ -3,7 +3,7 @@
 /**
  * AWS S3 Setup Script
  *
- * This script helps you set up AWS S3 for the claim management system.
+ * This script helps you set up AWS S3 for YDesk.
  * Run this script to create the S3 bucket if it doesn't exist and test file operations.
  */
 
@@ -25,7 +25,7 @@ dotenv.config({ path: prodEnvPath });
 
 async function setupAWSS3() {
   console.log(
-    "🚀 Setting up AWS S3 for Claim Management System...\n"
+    "🚀 Setting up AWS S3 for YDesk...\n"
   );
 
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
@@ -93,7 +93,7 @@ async function setupAWSS3() {
     console.log("\n🧪 Testing file operations...");
 
     const testKey = "test-file.txt";
-    const testContent = "This is a test file for claim management system.";
+    const testContent = "This is a test file for YDesk.";
 
     // Upload test file
     const putCommand = new PutObjectCommand({

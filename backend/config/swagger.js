@@ -9,9 +9,9 @@ const options = {
   definition: {
     openapi: "3.0.0",
     info: {
-      title: "Claim Management System API",
+      title: "YDesk API",
       version: "1.0.0",
-      description: "API documentation for the Claim Management System - User Authentication and Management",
+      description: "API documentation for YDesk - User Authentication and Management",
       contact: {
         name: "API Support",
         email: "support@claimmanagement.com"
@@ -417,9 +417,9 @@ const options = {
             },
             businessUnit: {
               type: "string",
-              enum: ["Alliance", "Coinnovation", "General"],
+              enum: ["Coinnovation", "General"],
               description: "Business unit",
-              example: "Alliance"
+              example: "Coinnovation"
             },
             category: {
               type: "string",
@@ -503,9 +503,9 @@ const options = {
           properties: {
             businessUnit: {
               type: "string",
-              enum: ["Alliance", "Coinnovation", "General"],
+              enum: ["Coinnovation", "General"],
               description: "Business unit",
-              example: "Alliance"
+              example: "Coinnovation"
             },
             category: {
               type: "string",

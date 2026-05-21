@@ -72,7 +72,7 @@ const upload = multer({
  *               claimData:
  *                 type: string
  *                 description: JSON string containing claim data
- *                 example: '{"businessUnit":"Alliance","category":"Travel","lineItems":[{"date":"2024-01-15","subCategory":"Meals","description":"Business lunch","amount":1500,"gstTotal":270}]}'
+ *                 example: '{"businessUnit":"Coinnovation","category":"Travel","lineItems":[{"date":"2024-01-15","subCategory":"Meals","description":"Business lunch","amount":1500,"gstTotal":270}]}'
  *               fileMapping:
  *                 type: string
  *                 description: JSON string mapping files to line items

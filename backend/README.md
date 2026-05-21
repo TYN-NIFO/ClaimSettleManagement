@@ -1,4 +1,4 @@
-# Claim Management System - Backend API
+# YDesk - Backend API
 
 A robust Node.js/Express backend API for managing insurance claims with role-based access control, file uploads, and comprehensive audit logging.
 
