@@ -436,10 +436,29 @@ router.get("/", auth, async (req, res) => {
 router.get("/stats", auth, async (req, res) => {
   try {
     const user = req.user;
+    const { scope } = req.query;
     const filter = {};
 
+<<<<<<< Updated upstream
     // Role-based filtering
     if (user.role === "employee") {
+=======
+    // Role-based filtering - RESTRICT BY DEFAULT
+    if (scope === "own") {
+      filter.employeeId = user._id;
+    } else if (user.role === "admin" || user.role === "executive" || user.role === "finance_manager") {
+      // No filter
+    } else if (user.role === "supervisor") {
+      const subordinates = await User.find({
+        $or: [
+          { assignedSupervisor1: user._id },
+          { assignedSupervisor2: user._id }
+        ]
+      }).select("_id");
+      const subordinateIds = subordinates.map(s => s._id);
+      filter.employeeId = { $in: [user._id, ...subordinateIds] };
+    } else {
+>>>>>>> Stashed changes
       filter.employeeId = user._id;
     }
     // Finance managers and admins can see all claims (no filter applied)
