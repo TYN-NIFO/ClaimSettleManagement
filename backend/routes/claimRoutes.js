@@ -5,6 +5,7 @@ import path from "path";
 import { auth } from "../middleware/auth.js";
 import { rbac, canAccessClaim } from "../middleware/rbac.js";
 import Claim from "../models/Claim.js";
+import User from "../models/User.js";
 import {
   validateAgainstPolicy,
   computeClaimTotals,
@@ -439,26 +440,25 @@ router.get("/stats", auth, async (req, res) => {
     const { scope } = req.query;
     const filter = {};
 
-<<<<<<< Updated upstream
-    // Role-based filtering
-    if (user.role === "employee") {
-=======
     // Role-based filtering - RESTRICT BY DEFAULT
     if (scope === "own") {
       filter.employeeId = user._id;
-    } else if (user.role === "admin" || user.role === "executive" || user.role === "finance_manager") {
+    } else if (
+      user.role === "admin" ||
+      user.role === "executive" ||
+      user.role === "finance_manager"
+    ) {
       // No filter
     } else if (user.role === "supervisor") {
       const subordinates = await User.find({
         $or: [
           { assignedSupervisor1: user._id },
-          { assignedSupervisor2: user._id }
-        ]
+          { assignedSupervisor2: user._id },
+        ],
       }).select("_id");
-      const subordinateIds = subordinates.map(s => s._id);
+      const subordinateIds = subordinates.map((s) => s._id);
       filter.employeeId = { $in: [user._id, ...subordinateIds] };
     } else {
->>>>>>> Stashed changes
       filter.employeeId = user._id;
     }
     // Finance managers and admins can see all claims (no filter applied)
