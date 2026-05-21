@@ -300,12 +300,72 @@ const getEmployeeNames = async (req, res) => {
   }
 };
 
+// Delete user (permanently)
+const deleteUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    
+    // Prevent self-deletion
+    if (userId === req.user._id.toString()) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check for associated claims
+    const Claim = (await import('../models/Claim.js')).default;
+    const claimCount = await Claim.countDocuments({ 
+      $or: [{ employeeId: userId }, { createdBy: userId }] 
+    });
+    
+    if (claimCount > 0) {
+      return res.status(400).json({ 
+        error: `Cannot delete user. They have ${claimCount} associated claim records. Please deactivate them instead.` 
+      });
+    }
+
+    // Check for associated leaves
+    const Leave = (await import('../models/Leave.js')).default;
+    const leaveCount = await Leave.countDocuments({ 
+      $or: [{ employeeId: userId }, { createdBy: userId }] 
+    });
+
+    if (leaveCount > 0) {
+      return res.status(400).json({ 
+        error: `Cannot delete user. They have ${leaveCount} associated leave records. Please deactivate them instead.` 
+      });
+    }
+
+    // Delete associated RefreshTokens
+    const RefreshToken = (await import('../models/RefreshToken.js')).default;
+    await RefreshToken.deleteMany({ userId });
+
+    // Delete the user
+    await User.findByIdAndDelete(userId);
+
+    // Create audit log
+    await createAuditLog(req.user._id, 'DELETE_USER', 'USER', {
+      targetUserId: userId,
+      userDetails: { name: user.name, email: user.email }
+    });
+
+    res.json({ message: 'User deleted permanently' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+};
+
 export {
   getUsers,
   getUserById,
   createUser,
   updateUser,
   deactivateUser,
+  deleteUser,
   resetPassword,
   getSupervisors,
   getEmployeeNames

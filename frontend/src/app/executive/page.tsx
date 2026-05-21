@@ -5,7 +5,7 @@ import ExecutiveDashboard from '../components/ExecutiveDashboard';
 
 export default function ExecutivePage() {
   return (
-    <AuthWrapper>
+    <AuthWrapper allowedRoles={['executive']}>
       <ExecutiveDashboard />
     </AuthWrapper>
   );

@@ -4,10 +4,10 @@ import { useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
 import {
-  useGetLeavesQuery,
-  useGetLeavesByDateRangeQuery,
   useGetLeaveAnalyticsQuery,
   useGetTodayLeavesQuery,
+  useGetLeavesByDateRangeQuery,
+  useGetHolidaysQuery,
 } from "@/lib/api";
 import LoadingSpinner from "./LoadingSpinner";
 import {
@@ -20,8 +20,13 @@ import {
   CheckCircle,
   AlertCircle,
   ClipboardCheck,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import PendingLeaveApprovals from "./PendingLeaveApprovals";
+
+const toLocalYmd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 interface ExecutiveLeaveDashboardProps {
   userRole: string;
@@ -42,6 +47,26 @@ export default function ExecutiveLeaveDashboard({
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
+  const handlePrevMonth = () => {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(activeMonth - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    const activeMonth = selectedMonth || currentMonth;
+    if (activeMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(activeMonth + 1);
+    }
+  };
+
   // Fetch analytics data
   const { data: analyticsData, isLoading: analyticsLoading } =
     useGetLeaveAnalyticsQuery({
@@ -59,15 +84,14 @@ export default function ExecutiveLeaveDashboard({
   const calendarLastDay = new Date(selectedYear, calendarMonth, 0);
   const { data: calendarData, isLoading: calendarLoading } =
     useGetLeavesByDateRangeQuery({
-      startDate: calendarFirstDay.toISOString().split("T")[0],
-      endDate: calendarLastDay.toISOString().split("T")[0],
+      startDate: toLocalYmd(calendarFirstDay),
+      endDate: toLocalYmd(calendarLastDay),
     });
 
+  const { data: holidaysData, isLoading: holidaysLoading } = useGetHolidaysQuery({ year: selectedYear });
+
   // Check if user has access to analytics
-  const hasAnalyticsAccess = [
-    "velan@theyellow.network",
-    "gg@theyellownetwork.com",
-  ].includes(userEmail);
+  const hasAnalyticsAccess = userRole === 'executive' || userRole === 'admin';
 
   if (!hasAnalyticsAccess) {
     return (
@@ -124,20 +148,7 @@ export default function ExecutiveLeaveDashboard({
           </p>
         </div>
 
-        <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-          {/* Year Selector */}
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-          >
-            {[currentYear - 2, currentYear - 1, currentYear].map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-
+        <div className="mt-4 sm:mt-0 flex items-center space-x-2">
           {/* Month Selector */}
           <select
             value={selectedMonth || ""}
@@ -153,6 +164,19 @@ export default function ExecutiveLeaveDashboard({
               </option>
             ))}
           </select>
+
+          {/* Year Selector */}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            {Array.from({ length: 11 }, (_, i) => currentYear - 5 + i).map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -160,33 +184,30 @@ export default function ExecutiveLeaveDashboard({
       <div className="flex items-center space-x-2 bg-white p-4 rounded-lg shadow border border-gray-200">
         <button
           onClick={() => setViewMode("pending")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "pending"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "pending"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
+            }`}
         >
           <ClipboardCheck className="h-4 w-4 mr-2" />
           Pending Approvals
         </button>
         <button
           onClick={() => setViewMode("calendar")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "calendar"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "calendar"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
+            }`}
         >
           <Calendar className="h-4 w-4 mr-2" />
           Calendar
         </button>
         <button
           onClick={() => setViewMode("employees")}
-          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            viewMode === "employees"
-              ? "bg-blue-100 text-blue-700"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
+          className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === "employees"
+            ? "bg-blue-100 text-blue-700"
+            : "text-gray-500 hover:text-gray-700"
+            }`}
         >
           <Users className="h-4 w-4 mr-2" />
           Employees
@@ -200,7 +221,10 @@ export default function ExecutiveLeaveDashboard({
           year={selectedYear}
           month={calendarMonth}
           leaves={calendarData?.leaves || []}
-          isLoading={calendarLoading}
+          holidays={holidaysData || []}
+          isLoading={calendarLoading || holidaysLoading}
+          onPrevMonth={handlePrevMonth}
+          onNextMonth={handleNextMonth}
         />
       )}
 
@@ -412,15 +436,14 @@ function ExecutiveOverviewView({
                   </p>
                   <div className="flex items-center space-x-2">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        emp.leaveType === "Planned Leave"
-                          ? "bg-green-100 text-green-800"
-                          : emp.leaveType === "Unplanned Leave"
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${emp.leaveType === "Planned Leave"
+                        ? "bg-green-100 text-green-800"
+                        : emp.leaveType === "Unplanned Leave"
                           ? "bg-red-100 text-red-800"
                           : emp.leaveType === "WFH"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
                     >
                       {emp.leaveType}
                     </span>
@@ -445,14 +468,20 @@ interface ExecutiveCalendarViewProps {
   year: number;
   month: number;
   leaves: any[];
+  holidays: any[];
   isLoading: boolean;
+  onPrevMonth: () => void;
+  onNextMonth: () => void;
 }
 
 function ExecutiveCalendarView({
   year,
   month,
   leaves,
+  holidays,
   isLoading,
+  onPrevMonth,
+  onNextMonth,
 }: ExecutiveCalendarViewProps) {
   // Generate calendar data
   const firstDay = new Date(year, month - 1, 1);
@@ -470,11 +499,11 @@ function ExecutiveCalendarView({
   }
 
   const getLeaveDataForDate = (date: Date) => {
-    const dateStr = date.toISOString().split("T")[0];
+    const localDateStr = toLocalYmd(date);
     return leaves.filter((leave: any) => {
-      const leaveDate = new Date(leave.startDate);
-      const leaveDateStr = leaveDate.toISOString().split("T")[0];
-      return leaveDateStr === dateStr;
+      const leaveStartStr = (leave.startDate || '').split("T")[0];
+      const leaveEndStr = (leave.endDate || leave.startDate || '').split("T")[0];
+      return localDateStr >= leaveStartStr && localDateStr <= leaveEndStr;
     });
   };
 
@@ -499,6 +528,23 @@ function ExecutiveCalendarView({
     }
   };
 
+  const getHolidayDataForDate = (date: Date) => {
+    if (!holidays) return [];
+
+    const localDateStr = toLocalYmd(date);
+    return holidays
+      .filter((holiday: any) => {
+        const holidayDateStr = (holiday.date || '').split("T")[0];
+        return holidayDateStr === localDateStr;
+      })
+      .map((holiday: any) => ({
+        date: holiday.date,
+        name: holiday.name,
+        isFlexi: holiday.isFlexi,
+        isHoliday: true,
+      }));
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-lg shadow p-6">
@@ -512,15 +558,28 @@ function ExecutiveCalendarView({
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:px-6">
-        <h3 className="text-lg leading-6 font-medium text-gray-900">
-          Organization Leave Calendar
-        </h3>
-        <p className="mt-1 text-sm text-gray-500">
-          {new Date(year, month - 1).toLocaleDateString("en-US", {
+        <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center space-x-2">
+          <button
+            onClick={onPrevMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Previous Month"
+          >
+            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <span>{new Date(year, month - 1).toLocaleDateString("en-US", {
             month: "long",
             year: "numeric",
-          })}{" "}
-          - All employee leaves
+          })}</span>
+          <button
+            onClick={onNextMonth}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            title="Next Month"
+          >
+            <ChevronRight className="h-5 w-5 text-gray-600" />
+          </button>
+        </h3>
+        <p className="mt-1 text-sm text-gray-500">
+          All employee leaves
         </p>
       </div>
 
@@ -542,21 +601,36 @@ function ExecutiveCalendarView({
             const isCurrentMonth = date.getMonth() === month - 1;
             const isToday = date.toDateString() === new Date().toDateString();
             const leaveData = getLeaveDataForDate(date);
+            const holidayData = getHolidayDataForDate(date);
+
+            const holiday = holidayData.length > 0 ? holidayData[0] : null;
+            let cellBg = isCurrentMonth ? "bg-white" : "bg-gray-50";
+            if (holiday) {
+              cellBg = holiday.isFlexi ? "bg-pink-50 border-pink-200" : "bg-indigo-50 border-indigo-200";
+            }
 
             return (
               <div
                 key={index}
-                className={`min-h-[100px] p-1 border border-gray-200 ${
-                  isCurrentMonth ? "bg-white" : "bg-gray-50"
-                } ${isToday ? "ring-2 ring-blue-500" : ""}`}
+                className={`min-h-[100px] p-1 border ${cellBg} ${isToday ? "ring-2 ring-blue-500" : "border-gray-200"}`}
               >
                 <div
-                  className={`text-xs p-1 text-right ${
-                    isCurrentMonth ? "text-gray-900" : "text-gray-400"
-                  } ${isToday ? "font-bold" : ""}`}
+                  className={`text-xs p-1 flex justify-between items-start ${isCurrentMonth ? (holiday ? "text-gray-900 font-medium" : "text-gray-900") : "text-gray-400"} ${isToday ? "font-bold" : ""}`}
                 >
-                  {date.getDate()}
+                  {holiday ? (
+                    <div className={`font-semibold truncate ${holiday.isFlexi ? "text-pink-800" : "text-indigo-800"}`}>
+                      {holiday.name}
+                    </div>
+                  ) : <div />}
+                  <span>{date.getDate()}</span>
                 </div>
+                {holiday && holiday.isFlexi && (
+                  <div className="px-1 mb-1">
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-pink-100 text-pink-800 shadow-sm border border-pink-200">
+                      Flexi
+                    </span>
+                  </div>
+                )}
 
                 {/* Leave Indicators */}
                 <div className="space-y-1">
@@ -568,11 +642,9 @@ function ExecutiveCalendarView({
                         className={`text-xs p-1 rounded border ${getLeaveTypeColor(
                           leave.leaveType
                         )}`}
-                        title={`${
-                          leave.employee?.name || leave.employeeEmail
-                        } - ${leave.leaveType}${
-                          leave.reason ? ` - ${leave.reason}` : ""
-                        }`}
+                        title={`${leave.employee?.name || leave.employeeEmail
+                          } - ${leave.leaveType}${leave.reason ? ` - ${leave.reason}` : ""
+                          }`}
                       >
                         <div className="font-medium truncate">
                           {
@@ -614,6 +686,14 @@ function ExecutiveCalendarView({
           <div className="flex items-center space-x-2">
             <div className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></div>
             <span className="text-xs text-gray-600">Permission</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-indigo-50 border border-indigo-200 rounded"></div>
+            <span className="text-xs text-gray-600 font-medium">Holiday</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-pink-50 border border-pink-200 rounded"></div>
+            <span className="text-xs text-gray-600 font-medium">Flexi Holiday</span>
           </div>
         </div>
       </div>

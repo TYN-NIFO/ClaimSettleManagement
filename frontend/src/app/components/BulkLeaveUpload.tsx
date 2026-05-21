@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useCreateLeaveMutation, useCreateBulkLeavesMutation } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 interface BulkLeaveUploadProps {
   onUploadComplete: () => void;
@@ -49,28 +50,28 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
 
   const validateRecord = (record: LeaveRecord): string[] => {
     const errors: string[] = [];
-    
+
     if (!record.employeeEmail) errors.push('Employee email is required');
     if (!record.startDate) errors.push('Start date is required');
     if (!record.endDate) errors.push('End date is required');
     if (!record.leaveType) errors.push('Leave type is required');
     if (!record.reason) errors.push('Reason is required');
-    
+
     if (record.startDate && record.endDate) {
       const start = new Date(record.startDate);
       const end = new Date(record.endDate);
       if (start > end) errors.push('Start date cannot be after end date');
     }
-    
+
     return errors;
   };
 
   const parseCSV = (csvText: string): LeaveRecord[] => {
     const lines = csvText.trim().split('\n');
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-    
+
     const records: LeaveRecord[] = [];
-    
+
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
       if (values.length >= 5) {
@@ -84,7 +85,7 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
         });
       }
     }
-    
+
     return records;
   };
 
@@ -128,7 +129,7 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
 
     try {
       let records: LeaveRecord[] = [];
-      
+
       if (uploadMethod === 'csv') {
         records = parseCSV(csvData);
       } else {
@@ -156,7 +157,7 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
         // Calculate dates between start and end
         const start = new Date(record.startDate);
         const end = new Date(record.endDate);
-        
+
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           bulkData.push({
             employeeEmail: record.employeeEmail,
@@ -174,7 +175,7 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
       try {
         const result = await createBulkLeaves(bulkData).unwrap();
         successCount = result.summary.successful;
-        
+
         if (result.summary.failed > 0) {
           // Add failed records to errors
           result.results.forEach((item: any) => {
@@ -187,11 +188,11 @@ export default function BulkLeaveUpload({ onUploadComplete }: BulkLeaveUploadPro
         console.error('Bulk upload failed:', error);
         allErrors.push('Bulk upload failed. Please try again.');
       }
-      
+
       setUploadProgress(100);
 
       if (allErrors.length === 0) {
-        alert(`Successfully uploaded ${successCount} leave records!`);
+        toast.success(`Successfully uploaded ${successCount} leave records!`);
         setIsOpen(false);
         onUploadComplete();
         // Reset form
@@ -223,7 +224,7 @@ sudharshan@theyellow.network,2024-12-23,2024-12-27,Planned Leave,Vacation,8
 gg@theyellownetwork.com,2024-12-26,2024-12-27,WFH,Work from home,8
 anand@theyellow.network,2024-12-30,2024-12-30,Permission,Personal work,2
 rakesh@theyellow.network,2024-12-30,2024-12-30,OD,Official duty,8`;
-    
+
     const blob = new Blob([template], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -340,7 +341,7 @@ rakesh@theyellow.network,2024-12-30,2024-12-30,OD,Official duty,8`;
                       + Add Record
                     </button>
                   </div>
-                  
+
                   {manualRecords.map((record, index) => (
                     <div key={index} className="border border-gray-200 rounded-md p-3 mb-3">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -418,7 +419,7 @@ rakesh@theyellow.network,2024-12-30,2024-12-30,OD,Official duty,8`;
                           />
                         </div>
                       </div>
-                      
+
                       {manualRecords.length > 1 && (
                         <button
                           type="button"
@@ -437,7 +438,7 @@ rakesh@theyellow.network,2024-12-30,2024-12-30,OD,Official duty,8`;
               {isUploading && (
                 <div className="mb-4">
                   <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div 
+                    <div
                       className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     ></div>

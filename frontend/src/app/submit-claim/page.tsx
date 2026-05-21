@@ -11,21 +11,21 @@ export default function SubmitClaimPage() {
 
   const handleClose = () => {
     // Navigate to the user's role-appropriate dashboard
-    if (user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') {
-      router.push('/executive');
-    } else {
-      switch (user?.role) {
-        case 'admin':
-          router.push('/admin');
-          break;
-        case 'finance_manager':
-          router.push('/finance');
-          break;
-        case 'employee':
-        default:
-          router.push('/employee');
-          break;
-      }
+    switch (user?.role) {
+      case 'executive':
+        router.push('/executive');
+        break;
+      case 'admin':
+        router.push('/admin');
+        break;
+      case 'finance_manager':
+        router.push('/finance');
+        break;
+      case 'employee':
+      case 'supervisor':
+      default:
+        router.push('/employee');
+        break;
     }
   };
 

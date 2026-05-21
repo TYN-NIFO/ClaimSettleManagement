@@ -6,7 +6,7 @@ import LeaveApprovalModal from './LeaveApprovalModal';
 import LoadingSpinner from './LoadingSpinner';
 
 export default function PendingLeaveApprovals() {
-  const { data, isLoading, error, refetch } = useGetPendingLeavesQuery({});
+  const { data, isLoading, error, refetch } = useGetPendingLeavesQuery({ limit: 200 });
   const [selectedLeave, setSelectedLeave] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 

@@ -6,87 +6,59 @@ import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/lib/store';
 import { setError, clearError } from '@/lib/slices/authSlice';
-import { useCheckUsernameMutation } from '@/lib/api';
 import authService from '@/lib/authService';
+import toast from 'react-hot-toast';
 
 const LoginPage = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const { isAuthenticated, user } = useSelector((state: RootState) => state.auth);
-  const [checkUsername, { isLoading: isCheckingUsername }] = useCheckUsernameMutation();
 
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Redirect to appropriate dashboard based on user role or email
-      if (user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
-        router.push('/executive');
-      } else {
-        switch (user.role) {
-          case 'employee':
-            router.push('/employee');
-            break;
-          case 'finance_manager':
-            router.push('/finance');
-            break;
-          case 'admin':
-            router.push('/admin');
-            break;
-          default:
-            router.push('/employee');
-        }
+      // Redirect to appropriate dashboard based on user role
+      switch (user.role) {
+        case 'executive':
+          router.push('/executive');
+          break;
+        case 'employee':
+        case 'supervisor':
+          router.push('/employee');
+          break;
+        case 'finance_manager':
+          router.push('/finance');
+          break;
+        case 'admin':
+          router.push('/admin');
+          break;
+        default:
+          router.push('/employee');
       }
     }
   }, [isAuthenticated, user, router]);
 
-  // Clear errors when form data changes
-  useEffect(() => {
-    if (Object.keys(errors).length > 0) {
-      setErrors({});
-      dispatch(clearError());
-    }
-  }, [formData, dispatch, errors]);
-
-  // Check email availability
-  const handleEmailBlur = async () => {
-    if (formData.email && formData.email.includes('@')) {
-      setIsCheckingEmail(true);
-      try {
-        console.log('Checking email availability for:', formData.email);
-        const result = await checkUsername({ email: formData.email }).unwrap();
-        console.log('Email check result:', result);
-        
-        if (!result.available) {
-          setErrors(prev => ({ ...prev, email: 'This email is not registered' }));
-        } else {
-          // Clear email error if email is available
-          setErrors(prev => {
-            const newErrors = { ...prev };
-            delete newErrors.email;
-            return newErrors;
-          });
-        }
-      } catch (error: any) {
-        console.error('Email check error:', error);
-        // Don't show error to user for email check failures
-        // Just log it for debugging
-      } finally {
-        setIsCheckingEmail(false);
-      }
-    }
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Clear error for this specific field or general errors when the user types
+    if (errors[name] || errors.general) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        delete newErrors.general;
+        return newErrors;
+      });
+      dispatch(clearError());
+    }
   };
 
   const validateForm = () => {
@@ -118,40 +90,40 @@ const LoginPage = () => {
     try {
       setIsAuthenticating(true);
       dispatch(clearError());
-      
+
       const result = await authService.authenticate(formData);
 
       // Setup auto-refresh for the new token
       authService.setupAutoRefresh();
 
-      // Redirect based on user role or email
-      if (result.user.email === 'velan@theyellow.network' || result.user.email === 'gg@theyellownetwork.com') {
-        router.push('/executive');
-      } else {
-        switch (result.user.role) {
-          case 'employee':
-            router.push('/employee');
-            break;
-          case 'finance_manager':
-            router.push('/finance');
-            break;
-          case 'admin':
-            router.push('/admin');
-            break;
-          default:
-            router.push('/employee');
-        }
+      // Redirect based on user role
+      switch (result.user.role) {
+        case 'executive':
+          router.push('/executive');
+          break;
+        case 'employee':
+        case 'supervisor':
+          router.push('/employee');
+          break;
+        case 'finance_manager':
+          router.push('/finance');
+          break;
+        case 'admin':
+          router.push('/admin');
+          break;
+        default:
+          router.push('/employee');
       }
     } catch (error: any) {
       console.error('Token authentication error:', error);
-      
-      if (error.message.includes('Invalid credentials')) {
-        setErrors({ 
-          email: 'Invalid credentials',
-          password: 'Invalid credentials'
+
+      if (error?.message?.includes('Invalid credentials') || error?.data?.details?.includes('Invalid credentials') || error?.data?.error?.includes('Authentication failed')) {
+        setErrors({
+          email: 'Enter a valid email address',
+          password: 'Incorrect password'
         });
       } else {
-        setErrors({ general: error.message || 'Authentication failed. Please try again.' });
+        setErrors({ general: error?.data?.error || error?.data?.message || error.message || 'Authentication failed. Please try again.' });
       }
     } finally {
       setIsAuthenticating(false);
@@ -166,10 +138,10 @@ const LoginPage = () => {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your credentials to access the claim management system
+            Enter your credentials to access YDesk
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -182,20 +154,15 @@ const LoginPage = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  errors.email ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${errors.email ? 'border-red-300' : 'border-gray-300'
+                  } placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                 placeholder="Email address"
                 value={formData.email}
                 onChange={handleInputChange}
-                onBlur={handleEmailBlur}
                 disabled={isAuthenticating}
               />
               {errors.email && (
                 <p className="mt-1 text-sm text-red-600">{errors.email}</p>
-              )}
-              {isCheckingEmail && (
-                <p className="mt-1 text-sm text-blue-600">Checking email...</p>
               )}
             </div>
             <div>
@@ -208,9 +175,8 @@ const LoginPage = () => {
                 type="password"
                 autoComplete="current-password"
                 required
-                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${
-                  errors.password ? 'border-red-300' : 'border-gray-300'
-                } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border ${errors.password ? 'border-red-300' : 'border-gray-300'
+                  } placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleInputChange}
@@ -237,7 +203,7 @@ const LoginPage = () => {
           <div>
             <button
               type="submit"
-              disabled={isAuthenticating || isCheckingUsername}
+              disabled={isAuthenticating}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isAuthenticating ? (

@@ -5,8 +5,8 @@ import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { RootState } from '@/lib/store';
-import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeactivateUserMutation, useResetUserPasswordMutation } from '@/lib/api';
-import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus } from 'lucide-react';
+import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeactivateUserMutation, useResetUserPasswordMutation, useDeleteUserMutation } from '@/lib/api';
+import { UserPlus, Trash2, Eye, Edit, Key, Menu, X, Users, Settings, FileText, CreditCard, Plus, ArrowLeft, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface User {
@@ -60,8 +60,7 @@ export default function UserManagement() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<DrawerMode>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   const [createForm, setCreateForm] = useState<CreateUserForm>({
     name: '',
     email: '',
@@ -70,19 +69,19 @@ export default function UserManagement() {
     role: 'employee',
     department: ''
   });
-  
+
   const [editForm, setEditForm] = useState<EditUserForm>({
     name: '',
     email: '',
     role: 'employee',
     department: ''
   });
-  
+
   const [resetPasswordForm, setResetPasswordForm] = useState<ResetPasswordForm>({
     password: '',
     confirmPassword: ''
   });
-  
+
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
   // RTK Query hooks
@@ -91,6 +90,7 @@ export default function UserManagement() {
   const [updateUser] = useUpdateUserMutation();
   const [deactivateUser] = useDeactivateUserMutation();
   const [resetPassword] = useResetUserPasswordMutation();
+  const [deleteUser] = useDeleteUserMutation();
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -193,13 +193,13 @@ export default function UserManagement() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isSubmitting) return;
-    
+
     if (!validateCreateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       const userData = {
@@ -233,13 +233,13 @@ export default function UserManagement() {
 
   const handleEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isSubmitting || !selectedUser) return;
-    
+
     if (!validateEditForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       const userData = {
@@ -265,13 +265,13 @@ export default function UserManagement() {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (isSubmitting || !selectedUser) return;
-    
+
     if (!validateResetPasswordForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       await resetPassword({ id: selectedUser._id, password: resetPasswordForm.password }).unwrap();
@@ -289,8 +289,8 @@ export default function UserManagement() {
   };
 
   const handleDeactivateUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to deactivate this user?')) return;
-    
+    if (!confirm('Are you sure you want to deactivate this user? They will no longer be able to log in, but their history will be preserved.')) return;
+
     try {
       await deactivateUser(userId).unwrap();
       toast.success('User deactivated successfully!');
@@ -300,11 +300,23 @@ export default function UserManagement() {
     }
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to PERMANENTLY DELETE this user? This action cannot be undone and will only work if the user has no claim or leave records.')) return;
+
+    try {
+      await deleteUser(userId).unwrap();
+      toast.success('User deleted permanently!');
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast.error(error?.data?.error || 'Error deleting user');
+    }
+  };
+
   const openDrawer = (mode: DrawerMode, user?: User) => {
     console.log('openDrawer called with mode:', mode, 'user:', user);
     setDrawerMode(mode);
     setSelectedUser(user || null);
-    
+
     if (mode === 'create') {
       setCreateForm({
         name: '',
@@ -325,7 +337,7 @@ export default function UserManagement() {
     } else if (mode === 'reset-password') {
       setResetPasswordForm({ password: '', confirmPassword: '' });
     }
-    
+
     setFormErrors({});
     setDrawerOpen(true);
     console.log('Drawer should now be open with mode:', mode);
@@ -346,19 +358,13 @@ export default function UserManagement() {
     } else if (form === 'reset') {
       setResetPasswordForm(prev => ({ ...prev, [field]: value }));
     }
-    
+
     // Clear error when user starts typing
     if (formErrors[field as keyof FormErrors]) {
       setFormErrors(prev => ({ ...prev, [field]: undefined }));
     }
   };
 
-  const navigationItems = [
-    { name: 'Dashboard', href: '/admin', icon: Settings },
-    { name: 'Users', href: '/admin/users', icon: Users, active: true },
-    { name: 'Claims', href: '/admin/claims', icon: FileText },
-    { name: 'Finance', href: '/finance', icon: CreditCard },
-  ];
 
   const getDrawerTitle = () => {
     switch (drawerMode) {
@@ -387,9 +393,8 @@ export default function UserManagement() {
                 required
                 value={createForm.name}
                 onChange={(e) => handleInputChange('create', 'name', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.name ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.name ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter full name"
               />
               {formErrors.name && (
@@ -403,9 +408,8 @@ export default function UserManagement() {
                 required
                 value={createForm.email}
                 onChange={(e) => handleInputChange('create', 'email', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.email ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter email address"
               />
               {formErrors.email && (
@@ -419,9 +423,8 @@ export default function UserManagement() {
                 required
                 value={createForm.password}
                 onChange={(e) => handleInputChange('create', 'password', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.password ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.password ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Minimum 6 characters"
               />
               {formErrors.password && (
@@ -435,9 +438,8 @@ export default function UserManagement() {
                 required
                 value={createForm.confirmPassword}
                 onChange={(e) => handleInputChange('create', 'confirmPassword', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Confirm password"
               />
               {formErrors.confirmPassword && (
@@ -454,6 +456,7 @@ export default function UserManagement() {
                 <option value="employee">Employee</option>
                 <option value="supervisor">Supervisor</option>
                 <option value="finance_manager">Finance Manager</option>
+                <option value="executive">Executive</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -464,9 +467,8 @@ export default function UserManagement() {
                 required
                 value={createForm.department}
                 onChange={(e) => handleInputChange('create', 'department', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.department ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.department ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter department"
               />
               {formErrors.department && (
@@ -479,9 +481,8 @@ export default function UserManagement() {
                 <select
                   value={createForm.supervisorLevel || 1}
                   onChange={(e) => handleInputChange('create', 'supervisorLevel', parseInt(e.target.value))}
-                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                    formErrors.supervisorLevel ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.supervisorLevel ? 'border-red-300' : 'border-gray-300'
+                    }`}
                 >
                   <option value={1}>Level 1</option>
                   <option value={2}>Level 2</option>
@@ -520,9 +521,8 @@ export default function UserManagement() {
                 required
                 value={editForm.name}
                 onChange={(e) => handleInputChange('edit', 'name', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.name ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.name ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter full name"
               />
               {formErrors.name && (
@@ -536,9 +536,8 @@ export default function UserManagement() {
                 required
                 value={editForm.email}
                 onChange={(e) => handleInputChange('edit', 'email', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.email ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.email ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter email address"
               />
               {formErrors.email && (
@@ -555,6 +554,7 @@ export default function UserManagement() {
                 <option value="employee">Employee</option>
                 <option value="supervisor">Supervisor</option>
                 <option value="finance_manager">Finance Manager</option>
+                <option value="executive">Executive</option>
                 <option value="admin">Admin</option>
               </select>
             </div>
@@ -565,9 +565,8 @@ export default function UserManagement() {
                 required
                 value={editForm.department}
                 onChange={(e) => handleInputChange('edit', 'department', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.department ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.department ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Enter department"
               />
               {formErrors.department && (
@@ -580,9 +579,8 @@ export default function UserManagement() {
                 <select
                   value={editForm.supervisorLevel || 1}
                   onChange={(e) => handleInputChange('edit', 'supervisorLevel', parseInt(e.target.value))}
-                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                    formErrors.supervisorLevel ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                  className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.supervisorLevel ? 'border-red-300' : 'border-gray-300'
+                    }`}
                 >
                   <option value={1}>Level 1</option>
                   <option value={2}>Level 2</option>
@@ -636,9 +634,8 @@ export default function UserManagement() {
             <div>
               <label className="block text-sm font-medium text-gray-700">Status</label>
               <p className="mt-1 text-sm text-gray-900">
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  selectedUser?.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${selectedUser?.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
                   {selectedUser?.isActive ? 'Active' : 'Inactive'}
                 </span>
               </p>
@@ -650,13 +647,13 @@ export default function UserManagement() {
               </p>
             </div>
             <div className="flex justify-end space-x-3 pt-4">
-                             <button
-                 type="button"
-                 onClick={() => selectedUser && openDrawer('edit', selectedUser)}
-                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-               >
-                 Edit User
-               </button>
+              <button
+                type="button"
+                onClick={() => selectedUser && openDrawer('edit', selectedUser)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+              >
+                Edit User
+              </button>
               <button
                 type="button"
                 onClick={closeDrawer}
@@ -678,9 +675,8 @@ export default function UserManagement() {
                 required
                 value={resetPasswordForm.password}
                 onChange={(e) => handleInputChange('reset', 'password', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.password ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.password ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Minimum 6 characters"
               />
               {formErrors.password && (
@@ -694,9 +690,8 @@ export default function UserManagement() {
                 required
                 value={resetPasswordForm.confirmPassword}
                 onChange={(e) => handleInputChange('reset', 'confirmPassword', e.target.value)}
-                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
-                  formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
-                }`}
+                className={`mt-1 block w-full rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${formErrors.confirmPassword ? 'border-red-300' : 'border-gray-300'
+                  }`}
                 placeholder="Confirm password"
               />
               {formErrors.confirmPassword && (
@@ -742,79 +737,21 @@ export default function UserManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)}></div>
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
-          <div className="flex h-16 items-center justify-between px-4">
-            <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
-            <button onClick={() => setSidebarOpen(false)}>
-              <X className="h-6 w-6 text-gray-400" />
-            </button>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                    item.active
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white border-r border-gray-200">
-          <div className="flex h-16 items-center px-4">
-            <h2 className="text-lg font-semibold text-gray-900">Admin Panel</h2>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                    item.active
-                      ? 'bg-blue-100 text-blue-900'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon className="mr-3 h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="w-full">
         {/* Header */}
         <header className="bg-white shadow-sm border-b">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center h-16">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+              <Link
+                href="/admin"
+                className="p-2 rounded-full text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                title="Back to Dashboard"
               >
-                <Menu className="h-6 w-6" />
-              </button>
-              <h1 className="ml-4 lg:ml-0 text-2xl font-bold text-gray-900">User Management</h1>
+                <ArrowLeft className="h-6 w-6" />
+              </Link>
+              <h1 className="ml-4 text-2xl font-bold text-gray-900">User Management</h1>
             </div>
             <button
               onClick={(e) => {
@@ -870,8 +807,8 @@ export default function UserManagement() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {users.map((user: User) => (
-                      <tr 
-                        key={user._id} 
+                      <tr
+                        key={user._id}
                         className="hover:bg-gray-50"
                         onClick={(e) => {
                           e.preventDefault();
@@ -885,12 +822,11 @@ export default function UserManagement() {
                           {user.email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            user.role === 'admin' ? 'bg-red-100 text-red-800' :
-                            user.role === 'finance_manager' ? 'bg-purple-100 text-purple-800' :
-                            user.role === 'supervisor' ? 'bg-green-100 text-green-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-red-100 text-red-800' :
+                              user.role === 'finance_manager' ? 'bg-purple-100 text-purple-800' :
+                                user.role === 'supervisor' ? 'bg-green-100 text-green-800' :
+                                  'bg-blue-100 text-blue-800'
+                            }`}>
                             {user.role.replace('_', ' ').toUpperCase()}
                             {user.supervisorLevel && ` (L${user.supervisorLevel})`}
                           </span>
@@ -899,9 +835,8 @@ export default function UserManagement() {
                           {user.department || 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
                             {user.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
@@ -947,17 +882,29 @@ export default function UserManagement() {
                               <Key className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log('Deactivate button clicked for user:', user._id);
-                                handleDeactivateUser(user._id);
-                              }}
-                              className="text-red-600 hover:text-red-900"
-                              title="Deactivate User"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Deactivate button clicked for user:', user._id);
+                                  handleDeactivateUser(user._id);
+                                }}
+                                className="text-orange-600 hover:text-orange-900"
+                                title="Deactivate User"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('Delete button clicked for user:', user._id);
+                                  handleDeleteUser(user._id);
+                                }}
+                                className="text-red-600 hover:text-red-900"
+                                title="Delete User Permanently"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                           </div>
                         </td>
                       </tr>

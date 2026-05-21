@@ -1,7 +1,7 @@
 {
   "name": "claim-app-backend",
   "version": "1.0.0",
-  "description": "Backend API for Claim Management System",
+  "description": "Backend API for YDesk",
   "type": "module",
   "main": "server.js",
   "scripts": {

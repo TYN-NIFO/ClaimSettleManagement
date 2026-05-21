@@ -10,7 +10,7 @@ export default function TopNav() {
   return (
     <div className="w-full bg-gray-800 text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between">
-        <Link href="/" className="font-semibold">Claim Management</Link>
+        <Link href="/" className="font-semibold">YDesk</Link>
       </div>
     </div>
   );

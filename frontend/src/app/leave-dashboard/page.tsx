@@ -7,7 +7,7 @@ import AuthWrapper from '@/app/components/AuthWrapper';
 
 import PendingLeaveApprovals from '@/app/components/PendingLeaveApprovals';
 import LeaveAnalyticsDashboard from '@/app/components/LeaveAnalyticsDashboard';
-import { BarChart3 , ClipboardCheck } from 'lucide-react';
+import { BarChart3, ClipboardCheck } from 'lucide-react';
 
 type ViewMode = 'approvals' | 'analytics';
 
@@ -18,9 +18,9 @@ export default function LeaveDashboard() {
 
   const userEmail = auth.user?.email || '';
   const userRole = auth.user?.role || 'employee';
-  
-  // Check if user can access leave dashboard (CTO/CEO only)
-  const canAccess = ['velan@theyellow.network', 'gg@theyellownetwork.com'].includes(userEmail);
+
+  // Check if user can access leave dashboard (executive only)
+  const canAccess = userRole === 'executive' || userRole === 'admin';
 
   // Redirect non-authorized users
   if (!canAccess) {
@@ -36,7 +36,7 @@ export default function LeaveDashboard() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
             <p className="text-gray-600 mb-4">Only CTO and CEO can access the Leave Management Dashboard.</p>
             <p className="text-sm text-gray-500 mb-6">Employees can manage their leaves from the Employee Dashboard.</p>
-            
+
             <div className="space-y-3">
               <button
                 onClick={() => window.location.href = '/employee'}
@@ -58,20 +58,20 @@ export default function LeaveDashboard() {
   }
 
   const navigationItems = [
-    { key: 'analytics' as ViewMode, label: 'Analytics', icon: <BarChart3 />}, 
+    { key: 'analytics' as ViewMode, label: 'Analytics', icon: <BarChart3 /> },
     { key: 'approvals' as ViewMode, label: 'Pending Approvals', icon: <ClipboardCheck /> }
-    
+
   ];
 
 
-  
+
   const renderContent = () => {
     switch (currentView) {
       case 'approvals':
         return <PendingLeaveApprovals />;
       case 'analytics':
         return (
-          <LeaveAnalyticsDashboard 
+          <LeaveAnalyticsDashboard
             userRole={userRole}
             userEmail={userEmail}
           />
@@ -94,7 +94,7 @@ export default function LeaveDashboard() {
                   Organization-wide leave analytics and approval management
                 </p>
               </div>
-              
+
 
             </div>
           </div>
@@ -107,11 +107,10 @@ export default function LeaveDashboard() {
                   <button
                     key={item.key}
                     onClick={() => setCurrentView(item.key)}
-                    className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                      currentView === item.key
+                    className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${currentView === item.key
                         ? 'border-blue-500 text-blue-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     <span className="text-lg">{item.icon}</span>
                     <span>{item.label}</span>

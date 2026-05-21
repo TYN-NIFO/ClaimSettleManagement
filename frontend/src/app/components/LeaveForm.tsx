@@ -23,21 +23,21 @@ const LEAVE_TYPES = [
   'Flexi'
 ];
 
-export default function LeaveForm({ 
-  initialData, 
-  mode = 'create', 
-  onSuccess, 
-  onCancel 
+export default function LeaveForm({
+  initialData,
+  mode = 'create',
+  onSuccess,
+  onCancel
 }: LeaveFormProps) {
   const router = useRouter();
   const [createLeave, { isLoading: isCreating }] = useCreateLeaveMutation();
   const [updateLeave, { isLoading: isUpdating }] = useUpdateLeaveMutation();
-  
+
   const [formData, setFormData] = useState({
     type: initialData?.type || '',
-    startDate: initialData?.startDate ? 
+    startDate: initialData?.startDate ?
       new Date(initialData.startDate).toISOString().split('T')[0] : '',
-    endDate: initialData?.endDate ? 
+    endDate: initialData?.endDate ?
       new Date(initialData.endDate).toISOString().split('T')[0] : '',
     hours: initialData?.hours || '',
     reason: initialData?.reason || '',
@@ -82,7 +82,7 @@ export default function LeaveForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -104,7 +104,7 @@ export default function LeaveForm({
       // Show success message and set success state
       toast.success('Leave request submitted successfully!');
       setIsSuccess(true);
-      
+
       if (onSuccess) {
         onSuccess();
       } else {
@@ -113,23 +113,33 @@ export default function LeaveForm({
           // Get user from store to determine routing
           const state = store.getState() as any;
           const currentUser = state.auth.user;
-          
-          if (currentUser?.email === 'velan@theyellow.network' || currentUser?.email === 'gg@theyellownetwork.com') {
-            router.push('/executive');
-          } else {
-            router.push('/employee');
+
+          switch (currentUser?.role) {
+            case 'executive':
+              router.push('/executive');
+              break;
+            case 'finance_manager':
+              router.push('/finance');
+              break;
+            case 'admin':
+              router.push('/admin');
+              break;
+            default:
+              router.push('/employee');
           }
         }, 1500);
       }
     } catch (error: any) {
       console.error('Form submission error:', error);
-      
+
       // Show error information
       let errorMessage = 'An error occurred while submitting the form';
       if (error.data?.details) {
         errorMessage = error.data.details;
       } else if (error.data?.error) {
         errorMessage = error.data.error;
+      } else if (error.data?.message) {
+        errorMessage = error.data.message;
       } else if (error.status === 400) {
         errorMessage = 'Bad request - please check your form data';
       } else if (error.status === 401) {
@@ -137,14 +147,15 @@ export default function LeaveForm({
       } else if (error.status === 500) {
         errorMessage = 'Server error - please try again later';
       }
-      
+
+      toast.error(errorMessage);
       setErrors({ submit: errorMessage });
     }
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear errors when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
@@ -193,9 +204,8 @@ export default function LeaveForm({
             id="type"
             value={formData.type}
             onChange={(e) => handleInputChange('type', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              errors.type ? 'border-red-500' : 'border-gray-300'
-            }`}
+            className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.type ? 'border-red-500' : 'border-gray-300'
+              }`}
             disabled={isFormDisabled}
           >
             <option value="">Select leave type</option>
@@ -217,9 +227,8 @@ export default function LeaveForm({
               id="startDate"
               value={formData.startDate}
               onChange={(e) => handleInputChange('startDate', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.startDate ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.startDate ? 'border-red-500' : 'border-gray-300'
+                }`}
               disabled={isFormDisabled}
             />
             {errors.startDate && <p className="mt-1 text-sm text-red-600">{errors.startDate}</p>}
@@ -234,9 +243,8 @@ export default function LeaveForm({
               id="endDate"
               value={formData.endDate}
               onChange={(e) => handleInputChange('endDate', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.endDate ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.endDate ? 'border-red-500' : 'border-gray-300'
+                }`}
               disabled={isFormDisabled}
             />
             {errors.endDate && <p className="mt-1 text-sm text-red-600">{errors.endDate}</p>}
@@ -258,9 +266,8 @@ export default function LeaveForm({
               value={formData.hours}
               onChange={(e) => handleInputChange('hours', e.target.value)}
               placeholder="Enter hours (0.5 - 24)"
-              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.hours ? 'border-red-500' : 'border-gray-300'
-              }`}
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.hours ? 'border-red-500' : 'border-gray-300'
+                }`}
               disabled={isFormDisabled}
             />
             {errors.hours && <p className="mt-1 text-sm text-red-600">{errors.hours}</p>}
@@ -321,7 +328,7 @@ export default function LeaveForm({
               mode === 'create' ? 'Submit Leave Request' : 'Update Leave Request'
             )}
           </button>
-          
+
           {onCancel && !isSuccess && (
             <button
               type="button"
@@ -332,7 +339,7 @@ export default function LeaveForm({
               Cancel
             </button>
           )}
-          
+
           {isSuccess && (
             <button
               type="button"

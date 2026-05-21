@@ -4,23 +4,25 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useLogoutMutation } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useLogoutMutation } from '@/lib/api';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import authService from '@/lib/authService';
-import { 
-  Plus, 
-  LogOut, 
-  User, 
-  FileText, 
-  DollarSign, 
+import toast from 'react-hot-toast';
+import {
+  Plus,
+  LogOut,
+  User,
+  FileText,
+  DollarSign,
   Clock,
   CheckCircle,
   AlertCircle,
   Eye,
   Edit,
   Trash2,
-  Calendar
+  Calendar,
+  List
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
@@ -28,7 +30,7 @@ import LeaveMonthlyView from './LeaveMonthlyView';
 import EmployeeLeaveDashboard from './EmployeeLeaveDashboard';
 
 
-type ViewMode = 'claims' | 'leaves' | 'leave-dashboard';
+type ViewMode = 'claims' | 'leaves' | 'my-calendar' | 'leave-dashboard';
 
 export default function EmployeeDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -36,7 +38,8 @@ export default function EmployeeDashboard() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
+  const { data: claimStats } = useGetClaimStatsQuery({ scope: 'own' });
   const claims = claimsData?.claims || [];
   const [logoutMutation] = useLogoutMutation();
   const router = useRouter();
@@ -51,6 +54,7 @@ export default function EmployeeDashboard() {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('Logout failed, redirecting to login...');
       // Force logout even if API call fails
       await authService.logout();
       dispatch(logout());
@@ -60,30 +64,18 @@ export default function EmployeeDashboard() {
 
   // Calculate statistics
   const calculateStats = () => {
-    if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
-    
-    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
-      acc.total++;
-      acc.totalAmount += claim.grandTotal || 0;
-      
-      switch (claim.status) {
-        case 'submitted':
-          acc.pending++;
-          break;
-        case 'approved':
-        case 'finance_approved':
-        case 'paid':
-          acc.approved++;
-          break;
-        case 'rejected':
-          acc.rejected++;
-          break;
-      }
-      
-      return acc;
-    }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-    
-    return stats;
+    if (!claimStats) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
+
+    const countByStatus = (status: string) =>
+      claimStats.statusStats?.find((item: { _id: string }) => item._id === status)?.count || 0;
+
+    return {
+      total: claimStats.totalClaims || 0,
+      pending: countByStatus('submitted'),
+      approved: countByStatus('approved') + countByStatus('finance_approved') + countByStatus('paid') + countByStatus('done'),
+      rejected: countByStatus('rejected'),
+      totalAmount: claimStats.totalAmount || 0
+    };
   };
 
   const stats = calculateStats();
@@ -112,7 +104,7 @@ export default function EmployeeDashboard() {
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               {currentView === 'claims' && (
                 <button
@@ -123,9 +115,9 @@ export default function EmployeeDashboard() {
                   New Claim
                 </button>
               )}
-              
 
-              
+
+
               <button
                 onClick={handleLogout}
                 className="flex items-center px-3 py-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -144,17 +136,20 @@ export default function EmployeeDashboard() {
           <nav className="-mb-px flex space-x-8">
             {[
               { key: 'claims' as ViewMode, label: 'Claims', icon: FileText },
-              { key: 'leaves' as ViewMode, label: 'Leaves', icon: Calendar },
-              { key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }
+              { key: 'leaves' as ViewMode, label: 'Leaves', icon: List },
+              { key: 'my-calendar' as ViewMode, label: 'My Calendar', icon: Calendar },
+              ...(user?.role === 'executive' ? [{ key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }] : [])
             ].map((tab) => (
               <button
                 key={tab.key}
-                onClick={() => setCurrentView(tab.key)}
-                className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  currentView === tab.key
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                onClick={() => {
+                  setCurrentView(tab.key);
+                  setShowClaimForm(false);
+                }}
+                className={`flex items-center space-x-2 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors ${currentView === tab.key
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
               >
                 <tab.icon className="h-4 w-4" />
                 <span>{tab.label}</span>
@@ -247,7 +242,7 @@ export default function EmployeeDashboard() {
                     <h2 className="text-lg font-medium text-gray-900">My Claims</h2>
                     <p className="text-sm text-gray-600">View and manage your expense claims</p>
                   </div>
-                  
+
                   <div className="p-6">
                     {claimsLoading ? (
                       <div className="flex items-center justify-center py-8">
@@ -297,14 +292,13 @@ export default function EmployeeDashboard() {
                                   ₹{claim.grandTotal?.toLocaleString() || '0'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
                                     claim.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                    claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                    claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
-                                    claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
-                                    'bg-gray-100 text-gray-800'
-                                  }`}>
+                                      claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                        claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
+                                          claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
+                                            'bg-gray-100 text-gray-800'
+                                    }`}>
                                     {claim.status.replace('_', ' ').toUpperCase()}
                                   </span>
                                 </td>
@@ -362,7 +356,7 @@ export default function EmployeeDashboard() {
                         <option key={year} value={year}>{year}</option>
                       ))}
                     </select>
-                    
+
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
@@ -376,12 +370,16 @@ export default function EmployeeDashboard() {
                     </select>
                   </div>
                 </div>
-                <LeaveMonthlyView 
+                <LeaveMonthlyView
                   year={selectedYear}
                   month={selectedMonth}
                   isCurrentUser={true}
                 />
               </div>
+            )}
+
+            {currentView === 'my-calendar' && (
+              <EmployeeLeaveDashboard userId={user?._id} forceView="calendar" />
             )}
 
             {currentView === 'leave-dashboard' && (

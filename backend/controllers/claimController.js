@@ -151,17 +151,11 @@ const createClaim = async (req, res) => {
         status: claimData.status,
         financeApproval: claimData.financeApproval
       });
-    } 
+    }
     // Special handling for executive (gg) claims
     else if (user.email === 'gg@theyellownetwork.com') {
       claimData.status = 'done';
-      claimData.executiveApproval = {
-        status: 'approved',
-        approvedBy: user._id,
-        approvedAt: new Date(),
-        notes: 'Auto-approved as created by executive'
-      };
-    } 
+    }
     // Default status for all other users
     else {
       claimData.status = 'submitted';
@@ -178,13 +172,12 @@ const createClaim = async (req, res) => {
         role: user.role
       }
     });
-    
+
     const claim = new Claim(claimData);
-    
+
     console.log('📝 Claim instance before save:', {
       status: claim.status,
       financeApproval: claim.financeApproval,
-      executiveApproval: claim.executiveApproval,
     });
     await claim.save();
     console.log('✅ Claim after save:', {
@@ -276,81 +269,7 @@ const financeApprove = async (req, res) => {
   }
 };
 
-// Executive approval (FINAL APPROVAL)
-const executiveApprove = async (req, res) => {
-  try {
-    const { action, notes, reason } = req.body;
-    const user = req.user;
-    const claim = req.claim;
-
-    console.log('🔍 executiveApprove called with:', {
-      action,
-      notes,
-      userRole: user.role,
-      claimId: claim._id,
-      claimStatus: claim.status
-    });
-
-    if (user.role !== 'executive') {
-      return res.status(403).json({ error: 'Only executives can give final approval' });
-    }
-
-    // Check if claim is ready for executive approval (FINAL APPROVAL)
-    // Also allow if claim was created by finance manager and is in finance_approved status
-    if (claim.status !== 'finance_approved') {
-      return res.status(400).json({ error: 'Claim not ready for executive approval' });
-    }
-
-    if (action === 'approve') {
-      // If claim was created by finance manager, mark as 'done' directly
-      // Otherwise, mark as 'executive_approved' (can be marked as paid later)
-      claim.status = 'executive_approved';
-      
-      // Check if the claim was created by finance manager
-      const createdByUser = await User.findById(claim.createdBy);
-      if (createdByUser && createdByUser.email === 'finance@theyellow.network') {
-        claim.status = 'done';
-      }
-      
-      claim.executiveApproval = {
-        status: 'approved',
-        approvedBy: user._id,
-        approvedAt: new Date(),
-        notes: notes || (claim.status === 'done' ? 'Auto-marked as done' : '')
-      };
-    } else if (action === 'reject') {
-      claim.status = 'rejected';
-      claim.executiveApproval = {
-        status: 'rejected',
-        approvedBy: user._id,
-        approvedAt: new Date(),
-        reason: reason || 'Rejected by executive',
-        notes: notes || ''
-      };
-    }
-
-    await claim.save();
-
-    console.log('✅ Executive claim updated successfully:', {
-      claimId: claim._id,
-      newStatus: claim.status,
-      executiveApproval: claim.executiveApproval
-    });
-
-    // Create audit log
-    await createAuditLog(user._id, 'EXECUTIVE_APPROVE', 'CLAIM', {
-      claimId: claim._id,
-      action
-    });
-
-    res.json(claim);
-  } catch (error) {
-    console.error('Executive approve error:', error);
-    res.status(500).json({ error: 'Failed to approve claim' });
-  }
-};
-
-// Mark claim as paid (AFTER EXECUTIVE APPROVAL)
+// Mark claim as paid (AFTER FINANCE APPROVAL)
 const markAsPaid = async (req, res) => {
   try {
     const { channel } = req.body;
@@ -367,9 +286,9 @@ const markAsPaid = async (req, res) => {
       return res.status(403).json({ error: 'Only finance managers can mark claims as paid' });
     }
 
-    // Check if claim is ready for payment (AFTER EXECUTIVE APPROVAL)
-    if (claim.status !== 'executive_approved') {
-      return res.status(400).json({ error: 'Claim must be executive approved before marking as paid' });
+    // Check if claim is ready for payment (AFTER FINANCE APPROVAL)
+    if (claim.status !== 'finance_approved') {
+      return res.status(400).json({ error: 'Claim must be finance approved before marking as paid' });
     }
 
     const policy = await Policy.findOne();
@@ -500,7 +419,6 @@ export {
   getClaimById,
   createClaim,
   financeApprove,
-  executiveApprove,
   markAsPaid,
   uploadAttachment,
   getClaimStats

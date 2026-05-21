@@ -54,14 +54,14 @@ export default function ClaimViewPage() {
 
     // Employees can only edit their own claims if status allows it
     if (user.role === 'employee') {
-      return claim.employeeId._id === user._id && 
-             ['submitted', 'rejected'].includes(claim.status);
+      return claim.employeeId._id === user._id &&
+        ['submitted', 'rejected'].includes(claim.status);
     }
 
     // Supervisors can only edit their own claims (not their assigned employees' claims)
     if (user.role === 'supervisor') {
-      return claim.employeeId._id === user._id && 
-             ['submitted', 'rejected'].includes(claim.status);
+      return claim.employeeId._id === user._id &&
+        ['submitted', 'rejected'].includes(claim.status);
     }
 
     // Finance managers can see Edit for claims they created, except when already paid
@@ -85,8 +85,8 @@ export default function ClaimViewPage() {
 
     // Employee can delete own claims if not approved
     if (user.role === 'employee') {
-      return claim.employeeId._id === user._id && 
-             ['submitted', 'rejected'].includes(claim.status);
+      return claim.employeeId._id === user._id &&
+        ['submitted', 'rejected'].includes(claim.status);
     }
 
     // Supervisor can delete manageable claims before finance approval
@@ -105,16 +105,16 @@ export default function ClaimViewPage() {
   const handleMarkAsPaid = async (id: string, channel?: string) => {
     try {
       await markPaid({ id, channel: channel || 'manual' }).unwrap();
+      toast.success('Claim marked as paid successfully');
       setIsPaymentOpen(false);
-    } catch (e) {
-      // Error is surfaced via toast/UI elsewhere if implemented
-      // Keeping silent here to avoid disrupting UX
+    } catch (e: any) {
+      toast.error(e?.data?.error || e?.data?.message || 'Failed to mark claim as paid');
     }
   };
 
   const handleDeleteClaim = async () => {
     if (!claim) return;
-    
+
     if (!confirm('Are you sure you want to delete this claim? This action cannot be undone.')) {
       return;
     }
@@ -123,20 +123,18 @@ export default function ClaimViewPage() {
       setIsDeleting(true);
       const result = await deleteClaim(claimId).unwrap();
       toast.success(result.message || 'Claim deleted successfully');
-      
+
       // Navigate back to appropriate dashboard
-      if (user?.email === 'velan@theyellow.network' || user?.email === 'gg@theyellownetwork.com') {
-        router.push('/executive');
-      } else {
-        const dashboardRoutes = {
-          employee: '/employee',
-          finance_manager: '/finance',
-          admin: '/admin'
-        };
-        
-        const route = dashboardRoutes[user?.role as keyof typeof dashboardRoutes] || '/employee';
-        router.push(route);
-      }
+      const dashboardRoutes: Record<string, string> = {
+        executive: '/executive',
+        employee: '/employee',
+        supervisor: '/employee',
+        finance_manager: '/finance',
+        admin: '/admin'
+      };
+
+      const route = dashboardRoutes[user?.role || ''] || '/employee';
+      router.push(route);
     } catch (error: any) {
       const errorMessage = error?.data?.error || error?.message || 'Failed to delete claim';
       toast.error(errorMessage);

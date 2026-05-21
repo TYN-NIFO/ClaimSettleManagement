@@ -4,15 +4,16 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/navigation';
 import { RootState } from '@/lib/store';
-import { useGetClaimsQuery, useGetUsersQuery, useLogoutMutation } from '@/lib/api';
+import { useGetClaimsQuery, useGetClaimStatsQuery, useGetUsersQuery, useLogoutMutation } from '@/lib/api';
 import { useDispatch } from 'react-redux';
 import { logout } from '@/lib/slices/authSlice';
 import authService from '@/lib/authService';
-import { 
-  LogOut, 
-  User, 
-  FileText, 
-  DollarSign, 
+import toast from 'react-hot-toast';
+import {
+  LogOut,
+  User,
+  FileText,
+  DollarSign,
   Clock,
   CheckCircle,
   Shield,
@@ -32,7 +33,8 @@ import CategoryManager from './CategoryManager';
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
   const { user } = useSelector((state: RootState) => state.auth);
-  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({});
+  const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
+  const { data: claimStats } = useGetClaimStatsQuery({});
   const claims = claimsData?.claims || [];
   const { data: users, isLoading: usersLoading } = useGetUsersQuery({});
   const [logoutMutation] = useLogoutMutation();
@@ -48,6 +50,7 @@ export default function AdminDashboard() {
       router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      toast.error('Logout failed, redirecting to login...');
       // Force logout even if API call fails
       await authService.logout();
       dispatch(logout());
@@ -62,30 +65,18 @@ export default function AdminDashboard() {
 
   // Calculate statistics
   const calculateStats = () => {
-    if (!claims) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
-    
-    const stats = claims.reduce((acc: { total: number; pending: number; approved: number; rejected: number; totalAmount: number }, claim: any) => {
-      acc.total++;
-      acc.totalAmount += claim.grandTotal || 0;
-      
-      switch (claim.status) {
-        case 'submitted':
-          acc.pending++;
-          break;
-        case 'approved':
-        case 'finance_approved':
-        case 'paid':
-          acc.approved++;
-          break;
-        case 'rejected':
-          acc.rejected++;
-          break;
-      }
-      
-      return acc;
-    }, { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 });
-    
-    return stats;
+    if (!claimStats) return { total: 0, pending: 0, approved: 0, rejected: 0, totalAmount: 0 };
+
+    const countByStatus = (status: string) =>
+      claimStats.statusStats?.find((item: { _id: string }) => item._id === status)?.count || 0;
+
+    return {
+      total: claimStats.totalClaims || 0,
+      pending: countByStatus('submitted'),
+      approved: countByStatus('approved') + countByStatus('finance_approved') + countByStatus('paid') + countByStatus('done'),
+      rejected: countByStatus('rejected'),
+      totalAmount: claimStats.totalAmount || 0
+    };
   };
 
   const stats = calculateStats();
@@ -174,7 +165,7 @@ export default function AdminDashboard() {
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-lg font-medium text-gray-900">Recent Claims</h2>
               </div>
-              
+
               <div className="p-6">
                 {claimsLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -224,14 +215,13 @@ export default function AdminDashboard() {
                               ₹{claim.grandTotal?.toLocaleString() || '0'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${claim.status === 'submitted' ? 'bg-yellow-100 text-yellow-800' :
                                 claim.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
-                                claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
+                                  claim.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    claim.status === 'finance_approved' ? 'bg-blue-100 text-blue-800' :
+                                      claim.status === 'paid' ? 'bg-purple-100 text-purple-800' :
+                                        'bg-gray-100 text-gray-800'
+                                }`}>
                                 {claim.status.replace('_', ' ').toUpperCase()}
                               </span>
                             </td>
@@ -266,11 +256,19 @@ export default function AdminDashboard() {
       case 'users':
         return (
           <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Users Management</h2>
-              <p className="text-sm text-gray-600">Manage system users and their roles</p>
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">Users Management</h2>
+                <p className="text-sm text-gray-600">Manage system users and their roles</p>
+              </div>
+              <button
+                onClick={() => router.push('/admin/users')}
+                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium"
+              >
+                Open Full Management
+              </button>
             </div>
-            
+
             <div className="p-6">
               {usersLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -294,9 +292,6 @@ export default function AdminDashboard() {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -309,44 +304,32 @@ export default function AdminDashboard() {
                             {user.email}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'admin' ? 'bg-purple-100 text-purple-800' :
                               user.role === 'finance_manager' ? 'bg-blue-100 text-blue-800' :
-                      
-                              'bg-gray-100 text-gray-800'
-                            }`}>
+
+                                'bg-gray-100 text-gray-800'
+                              }`}>
                               {user.role.replace('_', ' ').toUpperCase()}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                              }`}>
                               {user.isActive ? 'ACTIVE' : 'INACTIVE'}
                             </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => router.push(`/users/${user._id}`)}
-                                className="text-blue-600 hover:text-blue-900"
-                                title="View Details"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </button>
-                              <button
-                                onClick={() => router.push(`/users/${user._id}/edit`)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Edit User"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </button>
-                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <div className="mt-4 text-center">
+                    <button
+                      onClick={() => router.push('/admin/users')}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      View all users & manage →
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8">
@@ -404,7 +387,7 @@ export default function AdminDashboard() {
                 <p className="text-sm text-gray-600">Welcome back, {user?.name}</p>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <button
                 onClick={handleSubmitClaim}
@@ -436,11 +419,10 @@ export default function AdminDashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === tab.id
-                      ? 'border-purple-500 text-purple-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                  className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
+                    ? 'border-purple-500 text-purple-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
                 >
                   <Icon className="h-5 w-5 mr-2" />
                   {tab.label}

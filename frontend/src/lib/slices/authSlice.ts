@@ -4,7 +4,7 @@ interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'employee' | 'supervisor' | 'finance_manager' | 'admin';
+  role: 'employee' | 'supervisor' | 'finance_manager' | 'executive' | 'admin';
   supervisorLevel?: number;
   department?: string;
   isActive: boolean;
@@ -93,7 +93,7 @@ const authSlice = createSlice({
               user: user?.email,
               hasToken: !!accessToken
             });
-            
+
             // Check if token is expired
             let isTokenValid = true;
             if (accessToken) {
@@ -110,7 +110,7 @@ const authSlice = createSlice({
                 isTokenValid = false;
               }
             }
-            
+
             if (isTokenValid) {
               state.user = user;
               state.accessToken = accessToken;
@@ -158,14 +158,14 @@ const authSlice = createSlice({
   },
 });
 
-export const { 
-  setTokens, 
-  setUser, 
-  logout, 
-  setLoading, 
-  setError, 
-  clearError, 
-  loadStoredAuth, 
-  updateProfile 
+export const {
+  setTokens,
+  setUser,
+  logout,
+  setLoading,
+  setError,
+  clearError,
+  loadStoredAuth,
+  updateProfile
 } = authSlice.actions;
 export default authSlice.reducer;

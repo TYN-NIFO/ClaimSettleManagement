@@ -26,7 +26,7 @@ const canAccessClaim = async (req, res, next) => {
   try {
     const Claim = (await import('../models/Claim.js')).default;
     const claim = await Claim.findById(claimId);
-    
+
     if (!claim) {
       return res.status(404).json({ error: 'Claim not found' });
     }
@@ -52,7 +52,7 @@ const canAccessClaim = async (req, res, next) => {
           { assignedSupervisor2: user._id }
         ]
       }).select('_id');
-      
+
       const employeeIds = assignedEmployees.map(emp => emp._id.toString());
       if (employeeIds.includes(claim.employeeId.toString())) {
         req.claim = claim;
@@ -68,7 +68,7 @@ const canAccessClaim = async (req, res, next) => {
     }
 
     // Executives (CEO/CTO) can access all claims for final approval
-    if (user.role === 'executive' || user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
+    if (user.role === 'executive') {
       req.claim = claim;
       return next();
     }

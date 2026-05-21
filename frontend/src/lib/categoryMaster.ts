@@ -201,7 +201,7 @@ export const lineItemTypes: Record<string, LineItemType> = {
   }
 };
 
-export const businessUnits = ["Alliance", "Coinnovation", "General"];
+export const businessUnits = ["Coinnovation", "General"];
 
 export const cityClasses = ["A", "B", "C"];
 

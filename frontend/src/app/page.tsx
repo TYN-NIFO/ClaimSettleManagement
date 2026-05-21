@@ -12,23 +12,23 @@ export default function HomePage() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      // Redirect to appropriate dashboard based on user role or email
-      if (user.email === 'velan@theyellow.network' || user.email === 'gg@theyellownetwork.com') {
-        router.push('/executive');
-      } else {
-        switch (user.role) {
-          case 'employee':
-            router.push('/employee');
-            break;
-          case 'finance_manager':
-            router.push('/finance');
-            break;
-          case 'admin':
-            router.push('/admin');
-            break;
-          default:
-            router.push('/employee');
-        }
+      // Redirect to appropriate dashboard based on user role
+      switch (user.role) {
+        case 'executive':
+          router.push('/executive');
+          break;
+        case 'employee':
+        case 'supervisor':
+          router.push('/employee');
+          break;
+        case 'finance_manager':
+          router.push('/finance');
+          break;
+        case 'admin':
+          router.push('/admin');
+          break;
+        default:
+          router.push('/employee');
       }
     }
   }, [isAuthenticated, user, router]);
