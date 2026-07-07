@@ -11,6 +11,7 @@ import {
   ThumbsUp,
   DollarSign,
   Trash2,
+  Download,
 } from "lucide-react";
 import { useState } from "react";
 import PaymentModal from "./PaymentModal";
@@ -24,6 +25,7 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useSelector } from "react-redux";
 import { RootState } from "@/lib/store";
+import authService from '@/lib/authService';
 
 interface LineItem {
   _id: string;
@@ -110,6 +112,35 @@ export default function ClaimList({
 
   const handleEditClaim = (claimId: string) => {
     router.push(`/claims/${claimId}/edit`);
+  };
+
+  const handleDownloadExcel = async () => {
+    try {
+      const token = authService.getAccessToken();
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/claims/export`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Excel download failed');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `claims_details_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Claims details downloaded as Excel');
+    } catch (error) {
+      console.error('Excel download error:', error);
+      toast.error('Failed to download Excel file');
+    }
   };
 
   const canEditClaim = (claim: Claim): boolean => {
@@ -321,8 +352,18 @@ export default function ClaimList({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full divide-y divide-gray-200">
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={handleDownloadExcel}
+          className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+        >
+          <Download className="h-4 w-4 mr-2" />
+          Download Excel
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -489,6 +530,7 @@ export default function ClaimList({
           })}
         </tbody>
       </table>
+      </div>
       {payingClaim && (
         <PaymentModal
           claim={payingClaim}

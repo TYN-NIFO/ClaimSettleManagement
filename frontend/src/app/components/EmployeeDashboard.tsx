@@ -107,16 +107,16 @@ export default function EmployeeDashboard() {
 
             <div className="flex items-center space-x-4">
               {currentView === 'claims' && (
-                <button
-                  onClick={() => setShowClaimForm(true)}
-                  className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Claim
-                </button>
+                <>
+                  <button
+                    onClick={() => setShowClaimForm(true)}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Claim
+                  </button>
+                </>
               )}
-
-
 
               <button
                 onClick={handleLogout}

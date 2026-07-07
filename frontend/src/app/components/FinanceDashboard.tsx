@@ -163,10 +163,11 @@ export default function FinanceDashboard() {
     setSelectedClaim(null);
   };
 
-  const handleDownloadCSV = async () => {
+  const handleDownloadClaims = async (status?: string) => {
     try {
       const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
+      const selectedStatus = status || filters.status;
+      if (selectedStatus) params.append('status', selectedStatus);
       if (filters.category) params.append('category', filters.category);
 
       const token = authService.getAccessToken();
@@ -184,7 +185,7 @@ export default function FinanceDashboard() {
       const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `claims_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = `claims_${selectedStatus || 'all'}_${new Date().toISOString().split('T')[0]}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -210,11 +211,25 @@ export default function FinanceDashboard() {
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={handleDownloadCSV}
+                onClick={() => handleDownloadClaims('submitted')}
+                className="flex items-center px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-md hover:bg-yellow-700"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Submitted
+              </button>
+              <button
+                onClick={() => handleDownloadClaims('finance_approved')}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Finance Approved
+              </button>
+              <button
+                onClick={() => handleDownloadClaims()}
                 className="flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Download Export
+                Download All
               </button>
               <button
                 onClick={handleSubmitClaim}
