@@ -25,19 +25,29 @@ export default function ClaimViewPage() {
   const [deleteClaim] = useDeleteClaimMutation();
 
   // Helper function to handle file access via public S3 URL
-  const handleFileAccess = (url: string, fileName: string, isDownload: boolean = false) => {
+  const handleFileAccess = async (url: string, fileName: string, isDownload: boolean = false) => {
     try {
       if (isDownload) {
-        // Download file
+        // Use backend proxy to download — avoids S3 CORS restrictions
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+        const proxyUrl = `${API_URL}/claims/download-proxy?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(fileName)}`;
+        const response = await fetch(proxyUrl, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        if (!response.ok) throw new Error('Download failed');
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
+        a.href = blobUrl;
         a.download = fileName;
-        a.target = '_blank';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
       } else {
-        // View file in new tab
+        // View file in new tab directly from S3
         window.open(url, '_blank');
       }
     } catch (error) {

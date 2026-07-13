@@ -18,6 +18,7 @@ import {
   createClaim,
   financeApprove,
   markAsPaid,
+  getClaimById
 } from "../controllers/claimController.js";
 
 const router = express.Router();
@@ -637,23 +638,7 @@ router.get(
   "/:id",
   auth,
   rbac(["employee", "finance_manager", "executive", "admin"]),
-  async (req, res) => {
-    try {
-      const claim = await Claim.findById(req.params.id)
-        .populate("employeeId", "name email")
-        .populate("financeApproval.approvedBy", "name email")
-        .populate("payment.paidBy", "name email");
-
-      if (!claim) {
-        return res.status(404).json({ error: "Claim not found" });
-      }
-
-      res.json(claim);
-    } catch (error) {
-      console.error("Get claim error:", error);
-      res.status(500).json({ error: "Failed to fetch claim" });
-    }
-  }
+  getClaimById
 );
 
 /**
