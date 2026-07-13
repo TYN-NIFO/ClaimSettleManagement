@@ -18,16 +18,18 @@ import {
   TrendingUp,
   Plus,
   Calendar,
-  Download
+  Download,
+  MapPin
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 import FinanceApprovalModal from './FinanceApprovalModal';
 import PaymentModal from './PaymentModal';
 import FilterBar, { FilterState } from './FilterBar';
 import { categoryMaster } from '@/lib/categoryMaster';
+import TravelGuidelines from './TravelGuidelines';
 
 export default function FinanceDashboard() {
-  const [currentView, setCurrentView] = useState<'claims' | 'leave-dashboard'>('claims');
+  const [currentView, setCurrentView] = useState<'claims' | 'leave-dashboard' | 'travel-guidelines'>('claims');
   const { user } = useSelector((state: RootState) => state.auth);
   const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
   const claims = claimsData?.claims || [];
@@ -260,7 +262,8 @@ export default function FinanceDashboard() {
           <nav className="-mb-px flex space-x-8">
             {[
               { key: 'claims' as const, label: 'Claims', icon: FileText },
-              { key: 'leave-dashboard' as const, label: 'Leave Dashboard', icon: Calendar }
+              { key: 'leave-dashboard' as const, label: 'Leave Dashboard', icon: Calendar },
+              { key: 'travel-guidelines' as const, label: 'Travel Guidelines', icon: MapPin }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -397,6 +400,10 @@ export default function FinanceDashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {currentView === 'travel-guidelines' && (
+          <TravelGuidelines />
         )}
       </div>
 
