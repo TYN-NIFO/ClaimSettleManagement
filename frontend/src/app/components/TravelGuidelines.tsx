@@ -140,6 +140,20 @@ export default function TravelGuidelines() {
         </ul>
       </div>
 
+      {/* Chennai & Coimbatore Travel Budget */}
+      <div className="bg-white rounded-xl shadow p-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="p-2 bg-amber-100 rounded-lg"><DollarSign className="h-5 w-5 text-amber-600" /></div>
+          <h3 className="text-lg font-semibold text-gray-900">Chennai & Coimbatore Travel Budget</h3>
+        </div>
+        <ul className="space-y-2 text-gray-700">
+          <li className="flex items-start space-x-2">
+            <span className="text-amber-500 mt-1">•</span>
+            <span>Between <strong>Chennai & Coimbatore</strong>, the maximum travel approval budget is <strong className="text-amber-700">₹5,000/-</strong> (inclusive of accommodation & travel, per day).</span>
+          </li>
+        </ul>
+      </div>
+
       {/* General Guidelines */}
       <div className="bg-white rounded-xl shadow p-6">
         <div className="flex items-center space-x-3 mb-4">
