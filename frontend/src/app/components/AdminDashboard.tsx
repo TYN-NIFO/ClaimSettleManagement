@@ -26,7 +26,7 @@ import {
   FolderOpen,
   Plus,
   Calendar,
-  MapPin
+  Plane
 } from 'lucide-react';
 import PolicyManager from './PolicyManager';
 import CategoryManager from './CategoryManager';
@@ -88,8 +88,8 @@ export default function AdminDashboard() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'policy', label: 'Policy', icon: Settings },
     { id: 'categories', label: 'Categories', icon: FolderOpen },
-    { id: 'leave-dashboard', label: 'Leave Dashboard', icon: Calendar },
-    { id: 'travel-guidelines', label: 'Travel Guidelines', icon: MapPin }
+    { id: 'travel-guidelines', label: 'Travel Guidelines', icon: Plane },
+    { id: 'leave-dashboard', label: 'Leave Dashboard', icon: Calendar }
   ];
 
   const renderTabContent = () => {

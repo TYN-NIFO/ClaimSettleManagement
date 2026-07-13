@@ -19,7 +19,7 @@ import {
   Plus,
   Calendar,
   Download,
-  MapPin
+  Plane
 } from 'lucide-react';
 import ClaimList from './ClaimList';
 import FinanceApprovalModal from './FinanceApprovalModal';
@@ -262,8 +262,8 @@ export default function FinanceDashboard() {
           <nav className="-mb-px flex space-x-8">
             {[
               { key: 'claims' as const, label: 'Claims', icon: FileText },
-              { key: 'leave-dashboard' as const, label: 'Leave Dashboard', icon: Calendar },
-              { key: 'travel-guidelines' as const, label: 'Travel Guidelines', icon: MapPin }
+              { key: 'travel-guidelines' as const, label: 'Travel Guidelines', icon: Plane },
+              { key: 'leave-dashboard' as const, label: 'Leave Dashboard', icon: Calendar }
             ].map((tab) => (
               <button
                 key={tab.key}

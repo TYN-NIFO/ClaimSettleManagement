@@ -23,11 +23,7 @@ import {
   Trash2,
   Calendar,
   List,
-  MapPin,
-  Utensils,
-  Home,
-  Train,
-  Info
+  Plane
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
@@ -143,7 +139,7 @@ export default function EmployeeDashboard() {
             {[
               { key: 'claims' as ViewMode, label: 'Claims', icon: FileText },
               { key: 'leaves' as ViewMode, label: 'Leaves', icon: List },
-              { key: 'travel-guidelines' as ViewMode, label: 'Travel Guidelines', icon: MapPin },
+              { key: 'travel-guidelines' as ViewMode, label: 'Travel Guidelines', icon: Plane },
               { key: 'my-calendar' as ViewMode, label: 'My Calendar', icon: Calendar },
               ...(user?.role === 'executive' ? [{ key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }] : [])
             ].map((tab) => (
