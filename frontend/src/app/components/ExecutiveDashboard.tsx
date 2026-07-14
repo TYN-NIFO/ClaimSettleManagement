@@ -24,7 +24,8 @@ import {
   Users,
   BarChart3,
   Calendar,
-  Building
+  Building,
+  Plane
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
@@ -32,11 +33,12 @@ import ExecutiveLeaveDashboard from './ExecutiveLeaveDashboard';
 import HolidayConfiguration from './HolidayConfiguration';
 import FilterBar, { FilterState } from './FilterBar';
 import { categoryMaster } from '@/lib/categoryMaster';
+import TravelGuidelines from './TravelGuidelines';
 
 
 export default function ExecutiveDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
-  const [activeTab, setActiveTab] = useState<'personal' | 'organization' | 'leave-dashboard' | 'holidays'>('personal'); // 'personal' or 'organization'
+  const [activeTab, setActiveTab] = useState<'personal' | 'organization' | 'leave-dashboard' | 'travel-guidelines' | 'holidays'>('personal');
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth);
   const { data: claimsData, isLoading: claimsLoading, error: claimsError } = useGetClaimsQuery({ limit: 1000 });
   const { data: personalClaimStats } = useGetClaimStatsQuery({ scope: 'own' });
@@ -232,6 +234,18 @@ export default function ExecutiveDashboard() {
                       }`}
                   >
                     Leave Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('travel-guidelines')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'travel-guidelines'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                  >
+                    <span className="inline-flex items-center">
+                      <Plane className="h-4 w-4 mr-2" />
+                      Travel Guidelines
+                    </span>
                   </button>
                   <button
                     onClick={() => setActiveTab('holidays')}
@@ -604,6 +618,8 @@ export default function ExecutiveDashboard() {
                 userRole={user?.role || 'executive'}
                 userEmail={user?.email || ''}
               />
+            ) : activeTab === 'travel-guidelines' ? (
+              <TravelGuidelines />
             ) : activeTab === 'holidays' ? (
               <HolidayConfiguration />
             ) : null}

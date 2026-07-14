@@ -70,6 +70,7 @@ import checkRoute from './routes/checkRoute.js';
 
 // Import middleware
 import { auth } from './middleware/auth.js';
+import { downloadProxy } from './controllers/claimController.js';
 
 // Initialize Application Insights in production
 let appInsights;
@@ -103,7 +104,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration
 const allowedOrigins = (() => {
   if (process.env.NODE_ENV === 'production') {
     const list = [process.env.FRONTEND_URL, process.env.CORS_ORIGIN]
@@ -113,7 +113,11 @@ const allowedOrigins = (() => {
       .filter(Boolean);
     return list.length ? list : [];
   }
-  return [process.env.FRONTEND_URL || 'http://localhost:3000'];
+  // In development, allow localhost on 3000, 3001, and 3002
+  const envOrigins = [process.env.FRONTEND_URL, process.env.CORS_ORIGIN]
+    .filter(Boolean)
+    .map((v) => v.trim());
+  return [...new Set([...envOrigins, 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'])];
 })();
 
 // Optional: regex-based origins for flexible environments (e.g., Vercel previews)
@@ -244,6 +248,7 @@ app.get('/api/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.get('/api/claims/download-proxy', auth, downloadProxy);
 app.use('/api/claims', claimRoutes);
 app.use('/api/excel', checkRoute);
 app.use('/api/leaves', leaveRoutes);

@@ -22,15 +22,17 @@ import {
   Edit,
   Trash2,
   Calendar,
-  List
+  List,
+  Plane
 } from 'lucide-react';
 import ImprovedClaimForm from './ImprovedClaimForm';
 import ClaimList from './ClaimList';
 import LeaveMonthlyView from './LeaveMonthlyView';
 import EmployeeLeaveDashboard from './EmployeeLeaveDashboard';
+import TravelGuidelines from './TravelGuidelines';
 
 
-type ViewMode = 'claims' | 'leaves' | 'my-calendar' | 'leave-dashboard';
+type ViewMode = 'claims' | 'leaves' | 'travel-guidelines' | 'my-calendar' | 'leave-dashboard';
 
 export default function EmployeeDashboard() {
   const [showClaimForm, setShowClaimForm] = useState(false);
@@ -137,6 +139,7 @@ export default function EmployeeDashboard() {
             {[
               { key: 'claims' as ViewMode, label: 'Claims', icon: FileText },
               { key: 'leaves' as ViewMode, label: 'Leaves', icon: List },
+              { key: 'travel-guidelines' as ViewMode, label: 'Travel Guidelines', icon: Plane },
               { key: 'my-calendar' as ViewMode, label: 'My Calendar', icon: Calendar },
               ...(user?.role === 'executive' ? [{ key: 'leave-dashboard' as ViewMode, label: 'Leave Dashboard', icon: Calendar }] : [])
             ].map((tab) => (
@@ -376,6 +379,10 @@ export default function EmployeeDashboard() {
                   isCurrentUser={true}
                 />
               </div>
+            )}
+
+            {currentView === 'travel-guidelines' && (
+              <TravelGuidelines />
             )}
 
             {currentView === 'my-calendar' && (

@@ -83,7 +83,38 @@ const getClaimById = async (req, res) => {
       return res.status(404).json({ error: 'Claim not found' });
     }
 
-    res.json(claim);
+    // Generate S3 URLs for attachments that are missing the url field
+    const S3_BUCKET = process.env.AWS_S3_BUCKET_NAME || 'tyn-claims-app-storage-prod';
+    const S3_REGION = process.env.AWS_REGION || 'us-east-1';
+
+    const fixAttachments = (attachments) => {
+      if (!attachments || !Array.isArray(attachments)) return attachments;
+      return attachments.map(att => {
+        if (!att.url && att.storageKey) {
+          return {
+            ...att,
+            url: `https://${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com/${att.storageKey}`
+          };
+        }
+        return att;
+      });
+    };
+
+    // Convert to plain object and stringify ObjectIds for safe frontend comparison
+    const claimObj = JSON.parse(JSON.stringify(claim.toObject()));
+
+    // Fix top-level attachments
+    claimObj.attachments = fixAttachments(claimObj.attachments);
+
+    // Fix line item attachments
+    if (claimObj.lineItems) {
+      claimObj.lineItems = claimObj.lineItems.map(item => ({
+        ...item,
+        attachments: fixAttachments(item.attachments)
+      }));
+    }
+
+    res.json(claimObj);
   } catch (error) {
     console.error('Get claim error:', error);
     res.status(500).json({ error: 'Failed to fetch claim' });
@@ -414,6 +445,32 @@ const getClaimStats = async (req, res) => {
   }
 };
 
+// Download proxy — fetches S3 file server-side and streams to browser (avoids CORS)
+const downloadProxy = async (req, res) => {
+  try {
+    const { url, filename } = req.query;
+    if (!url) return res.status(400).json({ error: 'url param required' });
+    const S3_BUCKET = process.env.AWS_S3_BUCKET_NAME || 'tyn-claims-app-storage-prod';
+    const S3_REGION = process.env.AWS_REGION || 'us-east-1';
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname !== `${S3_BUCKET}.s3.${S3_REGION}.amazonaws.com`) {
+      return res.status(403).json({ error: 'URL not allowed' });
+    }
+    const s3Res = await fetch(url);
+    if (!s3Res.ok) return res.status(s3Res.status).json({ error: 'S3 fetch failed' });
+    const contentType = s3Res.headers.get('content-type') || 'application/octet-stream';
+    const safe = (filename || 'download').replace(/[^\w. -]/g, '_');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+    const reader = s3Res.body.getReader();
+    const pump = async () => { const {done,value} = await reader.read(); if(done){res.end();return;} res.write(Buffer.from(value)); return pump(); };
+    await pump();
+  } catch (error) {
+    console.error('Download proxy error:', error);
+    res.status(500).json({ error: 'Download failed' });
+  }
+};
+
 export {
   getClaims,
   getClaimById,
@@ -421,5 +478,6 @@ export {
   financeApprove,
   markAsPaid,
   uploadAttachment,
-  getClaimStats
+  getClaimStats,
+  downloadProxy
 };

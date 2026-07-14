@@ -25,10 +25,12 @@ import {
   AlertCircle,
   FolderOpen,
   Plus,
-  Calendar
+  Calendar,
+  Plane
 } from 'lucide-react';
 import PolicyManager from './PolicyManager';
 import CategoryManager from './CategoryManager';
+import TravelGuidelines from './TravelGuidelines';
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -86,6 +88,7 @@ export default function AdminDashboard() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'policy', label: 'Policy', icon: Settings },
     { id: 'categories', label: 'Categories', icon: FolderOpen },
+    { id: 'travel-guidelines', label: 'Travel Guidelines', icon: Plane },
     { id: 'leave-dashboard', label: 'Leave Dashboard', icon: Calendar }
   ];
 
@@ -369,9 +372,12 @@ export default function AdminDashboard() {
           </div>
         );
 
+      case 'travel-guidelines':
+        return <TravelGuidelines />;
+
       default:
         return null;
-    }
+      }
   };
 
   return (
