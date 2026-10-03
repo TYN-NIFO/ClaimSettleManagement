@@ -12,6 +12,7 @@ lerna-debug.log*
 .env.test.local
 .env.production.local
 config.env
+.mcp.json
 
 # Logs
 logs
