@@ -1,12 +1,29 @@
 import { z } from 'zod';
 
+// Helper to resolve either a 24-hex Mongo _id or a human sequence claimId (e.g. claim_2026_00147)
+async function resolveClaimMongoId(apiClient, idOrSeq) {
+  if (!idOrSeq) return idOrSeq;
+  if (/^[0-9a-fA-F]{24}$/.test(idOrSeq)) {
+    return idOrSeq;
+  }
+  try {
+    const res = await apiClient.request('/api/claims?limit=100');
+    const claims = res.claims || (Array.isArray(res) ? res : []);
+    const found = claims.find(c => c.claimId === idOrSeq || c._id === idOrSeq);
+    if (found) return found._id;
+  } catch (e) {
+    console.error('Failed to resolve claim sequence to Mongo ID:', e.message);
+  }
+  return idOrSeq;
+}
+
 export function registerClaimTools(server, apiClient) {
   // 1. Submit a new expense claim
   server.tool(
     'submit_claim',
     'Submit a new expense claim with line items and optional receipt files. Validates against active company policy.',
     {
-      businessUnit: z.enum(['Alliance', 'Coinnovation', 'General']).describe('Business unit'),
+      businessUnit: z.enum(['Alliance', 'Coinnovation', 'General']).default('General').describe('Business unit (e.g. General, Coinnovation)'),
       category: z.string().describe('Expense category (e.g., "Travel & Lodging", "Office & Admin", "Client Entertainment & Business Meals")'),
       lineItems: z.array(z.object({
         date: z.string().describe('Date of expense in YYYY-MM-DD format'),
@@ -18,7 +35,7 @@ export function registerClaimTools(server, apiClient) {
       })).min(1).describe('List of expense line items'),
       filePaths: z.array(z.string()).optional().describe('Optional list of absolute paths to receipt files on disk (PDF, JPG, PNG)')
     },
-    async ({ businessUnit, category, lineItems, filePaths = [] }) => {
+    async ({ businessUnit = 'General', category, lineItems, filePaths = [] }) => {
       try {
         if (!apiClient.isAuthenticated) {
           return {
@@ -30,7 +47,6 @@ export function registerClaimTools(server, apiClient) {
           };
         }
 
-        // Format line items ensuring amountInINR is calculated
         const formattedLineItems = lineItems.map(item => ({
           ...item,
           amountInINR: item.amountInINR || item.amount,
@@ -48,6 +64,8 @@ export function registerClaimTools(server, apiClient) {
         const claim = result.claim || result;
 
         const totalAmt = claim.grandTotal || claim.amount || formattedLineItems.reduce((acc, i) => acc + i.amount, 0);
+        const displayId = claim.claimId || claim._id;
+        const mongoId = claim._id;
 
         return {
           content: [{
@@ -55,10 +73,11 @@ export function registerClaimTools(server, apiClient) {
             text: [
               `🎉 Claim submitted successfully!`,
               `-----------------------------------------`,
-              `Claim ID: ${claim.claimId || claim._id}`,
+              `Claim Reference: ${displayId}`,
+              `Database ID: ${mongoId}`,
               `Category: ${claim.category}`,
               `Business Unit: ${claim.businessUnit}`,
-              `Status: ${claim.status ? claim.status.toUpperCase() : 'SUBMITTED'}`,
+              `Status: ${(claim.status || 'submitted').toUpperCase()}`,
               `Grand Total: ₹${totalAmt.toLocaleString()}`,
               `Line Items Count: ${formattedLineItems.length}`,
               `Attachments: ${filePaths.length} file(s) attached`
@@ -121,7 +140,7 @@ export function registerClaimTools(server, apiClient) {
           const id = c.claimId || c._id;
           const amt = c.grandTotal || c.amount || 0;
           const date = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A';
-          return `${index + 1}. [${c.status.toUpperCase()}] ID: ${id} | ₹${amt.toLocaleString()} | Category: ${c.category} | Date: ${date} | BU: ${c.businessUnit}`;
+          return `${index + 1}. [${(c.status || 'SUBMITTED').toUpperCase()}] ID: ${id} (DB ID: ${c._id}) | ₹${amt.toLocaleString()} | Category: ${c.category} | Date: ${date} | BU: ${c.businessUnit}`;
         }).join('\n');
 
         return {
@@ -145,9 +164,9 @@ export function registerClaimTools(server, apiClient) {
   // 3. Get claim details
   server.tool(
     'get_claim_details',
-    'Get full breakdown of a claim by its ID, including line items, attachments, approval status, and settlement details.',
+    'Get full breakdown of a claim by its ID or sequence number, including line items, attachments, approval status, and settlement details.',
     {
-      claimId: z.string().describe('The Mongo ObjectId or unique claim ID sequence')
+      claimId: z.string().describe('The Mongo ObjectId or unique claim ID sequence (e.g. claim_2026_00147)')
     },
     async ({ claimId }) => {
       try {
@@ -161,13 +180,15 @@ export function registerClaimTools(server, apiClient) {
           };
         }
 
-        const res = await apiClient.request(`/api/claims/${claimId}`);
+        const resolvedId = await resolveClaimMongoId(apiClient, claimId);
+        const res = await apiClient.request(`/api/claims/${resolvedId}`);
         const claim = res.claim || res;
 
         const lines = [
           `📄 Claim Details: ${claim.claimId || claim._id}`,
           `=========================================`,
-          `Status: ${claim.status.toUpperCase()}`,
+          `Database ID: ${claim._id}`,
+          `Status: ${(claim.status || 'SUBMITTED').toUpperCase()}`,
           `Employee: ${claim.employeeId?.name || 'N/A'} (${claim.employeeId?.email || 'N/A'})`,
           `Business Unit: ${claim.businessUnit}`,
           `Category: ${claim.category}`,
@@ -183,7 +204,11 @@ export function registerClaimTools(server, apiClient) {
           lines.push(`  ${i + 1}. [${itemDate}] ${item.subCategory}: ${item.description}`);
           lines.push(`     Amount: ₹${item.amountInINR || item.amount} (GST: ₹${item.gstTotal || 0})`);
           if (item.attachments && item.attachments.length > 0) {
-            lines.push(`     Receipts: ${item.attachments.map(a => a.name || a.url).join(', ')}`);
+            lines.push(`     Receipt Attachments (${item.attachments.length}):`);
+            item.attachments.forEach(att => {
+              lines.push(`       📎 ${att.name || 'Receipt'} (Key: ${att.storageKey || 'N/A'})`);
+              if (att.url) lines.push(`          URL: ${att.url}`);
+            });
           }
         });
 
@@ -222,7 +247,7 @@ export function registerClaimTools(server, apiClient) {
     'supervisor_review_claim',
     'Review a team member claim as a supervisor. Can approve or reject with feedback. (Restricted to supervisor and admin roles).',
     {
-      claimId: z.string().describe('Claim ID to review'),
+      claimId: z.string().describe('Claim ID or reference to review'),
       action: z.enum(['approve', 'reject']).describe('Action: "approve" or "reject"'),
       reason: z.string().optional().describe('Reason for rejection (required if action is reject)'),
       notes: z.string().optional().describe('Optional comments or supervisor notes')
@@ -256,7 +281,8 @@ export function registerClaimTools(server, apiClient) {
           };
         }
 
-        const res = await apiClient.request(`/api/claims/${claimId}/approve`, {
+        const resolvedId = await resolveClaimMongoId(apiClient, claimId);
+        const res = await apiClient.request(`/api/claims/${resolvedId}/approve`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, reason, notes })
@@ -285,7 +311,7 @@ export function registerClaimTools(server, apiClient) {
     'finance_review_claim',
     'Review a claim as finance manager. Approves for payment or rejects. (Restricted to finance_manager and admin roles).',
     {
-      claimId: z.string().describe('Claim ID to approve or reject'),
+      claimId: z.string().describe('Claim ID or reference to approve or reject'),
       action: z.enum(['approve', 'reject']).describe('Action: "approve" or "reject"'),
       reason: z.string().optional().describe('Reason for rejection (required if rejecting)'),
       notes: z.string().optional().describe('Optional notes for audit records')
@@ -319,7 +345,8 @@ export function registerClaimTools(server, apiClient) {
           };
         }
 
-        const res = await apiClient.request(`/api/claims/${claimId}/finance-approve`, {
+        const resolvedId = await resolveClaimMongoId(apiClient, claimId);
+        const res = await apiClient.request(`/api/claims/${resolvedId}/finance-approve`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, notes, reason })
@@ -348,7 +375,7 @@ export function registerClaimTools(server, apiClient) {
     'settle_claim_payment',
     'Mark a finance-approved claim as settled and paid. (Restricted to finance_manager and admin roles).',
     {
-      claimId: z.string().describe('Claim ID to mark as paid'),
+      claimId: z.string().describe('Claim ID or reference to mark as paid'),
       channel: z.enum(['Bank Transfer', 'Cash', 'Check']).default('Bank Transfer').describe('Payout channel')
     },
     async ({ claimId, channel = 'Bank Transfer' }) => {
@@ -370,7 +397,8 @@ export function registerClaimTools(server, apiClient) {
           };
         }
 
-        const res = await apiClient.request(`/api/claims/${claimId}/mark-paid`, {
+        const resolvedId = await resolveClaimMongoId(apiClient, claimId);
+        const res = await apiClient.request(`/api/claims/${resolvedId}/mark-paid`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ channel })
@@ -445,7 +473,7 @@ export function registerClaimTools(server, apiClient) {
           const id = c.claimId || c._id;
           const employee = c.employeeId?.name || 'Unknown';
           const amt = c.grandTotal || c.amount || 0;
-          return `${index + 1}. [${c.status.toUpperCase()}] ID: ${id} | Employee: ${employee} | ₹${amt.toLocaleString()} | Category: ${c.category} | BU: ${c.businessUnit}`;
+          return `${index + 1}. [${(c.status || 'SUBMITTED').toUpperCase()}] ID: ${id} (DB ID: ${c._id}) | Employee: ${employee} | ₹${amt.toLocaleString()} | Category: ${c.category} | BU: ${c.businessUnit}`;
         }).join('\n');
 
         return {
@@ -483,7 +511,7 @@ export function registerClaimTools(server, apiClient) {
         const res = await apiClient.request('/api/claims/stats');
 
         const breakdown = (res.statusStats || []).map(s => {
-          return `  • ${s._id ? s._id.toUpperCase() : 'UNKNOWN'}: ${s.count} claim(s)`;
+          return `  • ${(s._id || 'UNKNOWN').toUpperCase()}: ${s.count} claim(s)`;
         }).join('\n');
 
         const text = [

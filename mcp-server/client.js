@@ -96,7 +96,12 @@ export class ClaimApiClient {
     if (contentType.includes('application/json')) {
       responseData = await res.json();
     } else {
-      responseData = await res.text();
+      const text = await res.text();
+      try {
+        responseData = JSON.parse(text);
+      } catch {
+        responseData = text;
+      }
     }
 
     if (!res.ok) {
@@ -123,12 +128,21 @@ export class ClaimApiClient {
 
     const fileMapping = {};
     if (Array.isArray(filePaths) && filePaths.length > 0) {
+      const mimeTypes = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.pdf': 'application/pdf'
+      };
+
       for (let i = 0; i < filePaths.length; i++) {
         const filePath = filePaths[i];
         if (fs.existsSync(filePath)) {
           const fileName = path.basename(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeType = mimeTypes[ext] || 'application/octet-stream';
           const fileBuffer = fs.readFileSync(filePath);
-          const blob = new Blob([fileBuffer]);
+          const blob = new Blob([fileBuffer], { type: mimeType });
           formData.append('files', blob, fileName);
           fileMapping[fileName] = 0; // Default to first line item
         }
@@ -144,7 +158,14 @@ export class ClaimApiClient {
       body: formData
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned status ${res.status}: ${text.slice(0, 300)}`);
+    }
+
     if (!res.ok) {
       const msg = data.details || data.error || (data.violations ? JSON.stringify(data.violations) : 'Failed to submit claim');
       throw new Error(msg);
