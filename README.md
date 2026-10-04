@@ -16,7 +16,18 @@ A full-stack, enterprise expense claim and settlement management application wit
 
 ## 🤖 AI Assistant Integration (MCP Server)
 
-You can manage claims end-to-end directly through AI assistants:
+### Hosted endpoint (recommended)
+
+The backend serves MCP itself at **`https://internaltyn.onrender.com/mcp`** (Streamable HTTP, stateless). Nothing to install or deploy separately. Every request is authenticated with the user's own access token (`Authorization: Bearer <token>`), and tools act with exactly that user's permissions.
+
+* **Claude Code**: `claude mcp add --transport http ydesk-claims https://internaltyn.onrender.com/mcp --header "Authorization: Bearer <access token>"`
+* Tools: `get_current_user`, `get_company_policy`, `submit_claim` (receipts as base64), `list_claims`, `get_claim_details`, `finance_review_claim`, `settle_claim_payment`, `get_claim_stats`
+* Access tokens expire after 2 hours; get a new one from `POST /api/auth/token/`. OAuth sign-in (for claude.ai connectors) is planned.
+* Source: [`backend/mcp/`](./backend/mcp)
+
+### Local stdio server
+
+You can also run the standalone stdio server on your own machine:
 * **Claude Code**: `claude mcp add claim-settlement node "D:/TYN/ClaimSettleManagement/mcp-server/index.js" -e API_BASE_URL="https://internaltyn.onrender.com"`
 * **Google Gemini / Antigravity**: Configured via `~/.gemini/config/mcp_config.json`
 * **Claude Desktop**: Configured via `%APPDATA%\Claude\claude_desktop_config.json`
