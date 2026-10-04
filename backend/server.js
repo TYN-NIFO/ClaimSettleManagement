@@ -75,6 +75,7 @@ import { downloadProxy } from './controllers/claimController.js';
 // MCP endpoint for AI assistants
 import { createMcpRouter } from './mcp/index.js';
 import { isInternalMcpRequest } from './mcp/internal.js';
+import { createMcpOAuth } from './mcp/oauth.js';
 
 // Initialize Application Insights in production
 let appInsights;
@@ -262,8 +263,12 @@ app.use('/api/holidays', holidayRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/users', userRoutes);
 
-// MCP (Model Context Protocol) endpoint for AI assistants
-app.use('/mcp', limiter, createMcpRouter());
+// MCP (Model Context Protocol) endpoint for AI assistants, with OAuth sign-in
+// for connectors. Render sets RENDER_EXTERNAL_URL; PUBLIC_API_URL overrides it.
+const publicApiUrl = process.env.PUBLIC_API_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 5000}`;
+const mcpOAuth = createMcpOAuth(publicApiUrl);
+app.use(mcpOAuth.router);
+app.use('/mcp', limiter, createMcpRouter({ resourceMetadataUrl: mcpOAuth.resourceMetadataUrl }));
 
 // Enhanced error handling middleware
 app.use((err, req, res, next) => {

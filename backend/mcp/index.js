@@ -21,10 +21,20 @@ const jsonRpcError = (res, status, message) =>
 // Stateless Streamable HTTP MCP endpoint. Each request is authenticated with the
 // caller's own access token and gets a fresh server scoped to that user, so
 // nothing is shared between users and nothing is lost when the instance restarts.
-export function createMcpRouter() {
+export function createMcpRouter({ resourceMetadataUrl }) {
   const router = express.Router();
 
-  router.post('/', auth, async (req, res) => {
+  // Same auth as the REST API, but a 401 also tells MCP clients where to sign
+  // in (RFC 9728), which is how Claude starts the connector's OAuth flow.
+  const mcpAuth = (req, res, next) => {
+    res.set('WWW-Authenticate', `Bearer resource_metadata="${resourceMetadataUrl}"`);
+    auth(req, res, () => {
+      res.removeHeader('WWW-Authenticate');
+      next();
+    });
+  };
+
+  router.post('/', mcpAuth, async (req, res) => {
     // Tools call back into this same server on the port this request arrived on.
     const api = new LoopbackApiClient(req.socket.localPort, req.token);
     const server = buildServer({ api, user: req.user });
