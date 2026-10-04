@@ -18,11 +18,13 @@ A full-stack, enterprise expense claim and settlement management application wit
 
 ### Hosted endpoint (recommended)
 
-The backend serves MCP itself at **`https://internaltyn.onrender.com/mcp`** (Streamable HTTP, stateless). Nothing to install or deploy separately. Every request is authenticated with the user's own access token (`Authorization: Bearer <token>`), and tools act with exactly that user's permissions.
+The backend serves MCP itself at **`https://internaltyn.onrender.com/mcp`** (Streamable HTTP, stateless). Nothing to install or deploy separately. Users sign in with their existing YDesk email and password through OAuth, and tools act with exactly that user's permissions.
 
-* **Claude Code**: `claude mcp add --transport http ydesk-claims https://internaltyn.onrender.com/mcp --header "Authorization: Bearer <access token>"`
+* **claude.ai / Claude Desktop / mobile**: Settings → Connectors → Add custom connector → URL `https://internaltyn.onrender.com/mcp`, then **Connect** and sign in on the YDesk page. On Team/Enterprise plans an Owner adds it once under Admin settings → Connectors.
+* **Claude Code**: `claude mcp add --transport http ydesk-claims https://internaltyn.onrender.com/mcp`, then run `/mcp` in Claude Code to sign in.
 * Tools: `get_current_user`, `get_company_policy`, `submit_claim` (receipts as base64), `list_claims`, `get_claim_details`, `finance_review_claim`, `settle_claim_payment`, `get_claim_stats`
-* Access tokens expire after 2 hours; get a new one from `POST /api/auth/token/`. OAuth sign-in (for claude.ai connectors) is planned.
+* OAuth: discovery under `/.well-known/`, endpoints `/authorize`, `/token`, `/register`, `/revoke`. Allowed redirect URIs are Claude's callback and localhost; add others with `MCP_OAUTH_REDIRECT_URIS` (comma-separated). The public URL comes from `RENDER_EXTERNAL_URL`, or `PUBLIC_API_URL` if set.
+* A `Authorization: Bearer <access token>` header from `POST /api/auth/token/` also works.
 * Source: [`backend/mcp/`](./backend/mcp)
 
 ### Local stdio server

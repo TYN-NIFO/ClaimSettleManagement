@@ -601,5 +601,6 @@ export {
   resetPassword,
   revokeUserSessions,
   uploadAvatar,
-  createAuditLog
+  createAuditLog,
+  generateAccessToken
 };
