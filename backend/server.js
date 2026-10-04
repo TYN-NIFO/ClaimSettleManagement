@@ -158,7 +158,7 @@ if (process.env.NODE_ENV !== 'test') {
   }
 }
 
-app.use(cors({
+const appCors = cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // allow non-browser clients
     if (isOriginAllowed(origin)) return callback(null, true);
@@ -167,7 +167,19 @@ app.use(cors({
   },
   credentials: true,
   optionsSuccessStatus: 200
-}));
+});
+
+// MCP and its OAuth endpoints authenticate with bearer tokens or a signed form,
+// never cookies, so any origin may call them: claude.ai checks connectors from
+// the browser, and the sign-in form posts with the backend's own Origin.
+const MCP_PUBLIC_PATHS = ['/mcp', '/authorize', '/token', '/register', '/revoke', '/oauth/login'];
+const isMcpPublicPath = (path) => {
+  const p = path.length > 1 ? path.replace(/\/+$/, '') : path;
+  return MCP_PUBLIC_PATHS.includes(p) || p.startsWith('/.well-known/');
+};
+const mcpCors = cors({ exposedHeaders: ['WWW-Authenticate', 'Mcp-Session-Id', 'Mcp-Protocol-Version'] });
+
+app.use((req, res, next) => (isMcpPublicPath(req.path) ? mcpCors : appCors)(req, res, next));
 
 // Explicitly enable preflight across all routes
 app.options('*', cors({
