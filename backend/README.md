@@ -98,7 +98,6 @@ npm run validate-prod
 ## 📡 API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `POST /api/auth/refresh` - Refresh token
 - `POST /api/auth/logout` - User logout

@@ -2,7 +2,6 @@ import express from "express";
 const router = express.Router();
 import cookieParser from "cookie-parser";
 import {
-  register,
   token,
   refresh,
   logout,
@@ -21,41 +20,6 @@ import { requireAdmin } from "../middleware/rbac.js";
 router.use(cookieParser());
 
 // Authentication endpoints - Token-based authentication
-
-/**
- * @swagger
- * /auth/register:
- *   post:
- *     tags: [Authentication]
- *     summary: Register a new user
- *     description: Create a new user account in the system
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       400:
- *         description: Validation error or user already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ValidationError'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post("/register/", register);
 
 /**
  * @swagger
