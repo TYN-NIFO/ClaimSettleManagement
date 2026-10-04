@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.490.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@sendgrid/mail": "^8.1.6",
     "applicationinsights": "^2.9.2",
     "bcryptjs": "^2.4.3",
@@ -37,7 +38,8 @@
     "nodemailer": "^7.0.9",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/swagger-jsdoc": "^6.0.4",
@@ -45,7 +47,7 @@
     "nodemon": "^2.0.22"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   },
   "keywords": [
     "claim-management",

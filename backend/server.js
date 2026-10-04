@@ -72,6 +72,10 @@ import checkRoute from './routes/checkRoute.js';
 import { auth } from './middleware/auth.js';
 import { downloadProxy } from './controllers/claimController.js';
 
+// MCP endpoint for AI assistants
+import { createMcpRouter } from './mcp/index.js';
+import { isInternalMcpRequest } from './mcp/internal.js';
+
 // Initialize Application Insights in production
 let appInsights;
 if (process.env.NODE_ENV === 'production' && process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
@@ -186,6 +190,8 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  // API calls made by MCP tools are already counted once at /mcp
+  skip: isInternalMcpRequest,
 });
 app.use('/api/', limiter);
 
@@ -255,6 +261,9 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/policy', policyRoutes);
 app.use('/api/users', userRoutes);
+
+// MCP (Model Context Protocol) endpoint for AI assistants
+app.use('/mcp', limiter, createMcpRouter());
 
 // Enhanced error handling middleware
 app.use((err, req, res, next) => {
