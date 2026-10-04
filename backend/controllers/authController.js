@@ -112,76 +112,6 @@ const createAuditLog = async (userId, action, resource, details = {}) => {
   }
 };
 
-// Register new user
-const register = async (req, res) => {
-  try {
-    const { name, email, password, role = 'employee', department } = req.body;
-
-    // Validate input
-    if (!name || !email || !password) {
-      return res.status(400).json({ 
-        error: 'Validation failed',
-        details: 'Name, email, and password are required' 
-      });
-    }
-
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(409).json({ 
-        error: 'User already exists',
-        details: 'A user with this email already exists' 
-      });
-    }
-
-    // Create new user
-    const user = new User({
-      name,
-      email: email.toLowerCase(),
-      password,
-      role,
-      department
-    });
-
-    // Set createdBy to self for self-registration
-    user.createdBy = user._id;
-    await user.save();
-
-    // Generate tokens
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken();
-    const jti = uuidv4();
-    const family = uuidv4();
-
-    // Store refresh token
-    await RefreshToken.create({
-      userId: user._id,
-      tokenHash: RefreshToken.hashToken(refreshToken),
-      jti,
-      family,
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    });
-
-    // Set refresh token cookie
-    setRefreshTokenCookie(res, refreshToken);
-
-    // Create audit log
-    await createAuditLog(user._id, 'REGISTER', 'AUTH', { 
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent')
-    });
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: user.toPublicJSON(),
-      accessToken
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
-  }
-};
-
 // Token-based authentication (replaces login)
 const token = async (req, res) => {
   try {
@@ -661,7 +591,6 @@ const revokeUserSessions = async (req, res) => {
 };
 
 export {
-  register,
   token,
   refresh,
   logout,
